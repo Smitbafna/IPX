@@ -1,5 +1,9 @@
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::cell::RefCell;
+use ic_cdk_macros::*;
+
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct CampaignMetadata {
@@ -21,4 +25,15 @@ pub enum CampaignStatus {
     Funded,
     Completed,
     Cancelled,
+}
+
+
+thread_local! {
+    static CAMPAIGN_COUNTER: RefCell<u64> = RefCell::new(0);
+    static CAMPAIGNS: RefCell<HashMap<u64, CampaignMetadata>> = RefCell::new(HashMap::new());
+}
+
+#[init]
+fn init() {
+    ic_cdk::println!("Campaign Factory initialized");
 }
