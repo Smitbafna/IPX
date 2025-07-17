@@ -4,6 +4,9 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use ic_cdk_macros::*;
 
+use ic_cdk::api::{msg_caller, time};
+use ic_cdk::api::management_canister::main::{create_canister, CreateCanisterArgument, CanisterSettings, CanisterId};
+use ic_cdk::api::call::call;
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct CampaignMetadata {
@@ -36,4 +39,138 @@ thread_local! {
 #[init]
 fn init() {
     ic_cdk::println!("Campaign Factory initialized");
+}
+
+
+#[update]
+async fn create_campaign(
+    title: String,
+    description: String,
+    funding_goal: u64,
+    revenue_share_percentage: u8,
+    oracle_endpoints: Vec<String>,
+) -> Result<u64, String> {
+    let caller = msg_caller();
+    if revenue_share_percentage == 0 || revenue_share_percentage > 100 {
+        return Err("Revenue share must be between 1-100%".to_string());
+    }
+    let campaign_id = CAMPAIGN_COUNTER.with(|counter| {
+        let current = *counter.borrow();
+        let next = current + 1;
+        *counter.borrow_mut() = next;
+        next
+    });
+    let metadata = CampaignMetadata {
+        creator: caller,
+        title: title.clone(),
+        description,
+        funding_goal,
+        revenue_share_percentage,
+        oracle_endpoints,
+        vault_canister_id: None,
+        created_at: time(),
+        status: CampaignStatus::Draft,
+    };
+    CAMPAIGNS.with(|campaigns| {
+        campaigns.borrow_mut().insert(campaign_id, metadata.clone());
+    });
+    match create_vault_canister(campaign_id, metadata).await {
+        Ok(vault_id) => {
+            CAMPAIGNS.with(|campaigns| {
+                if let Some(mut campaign) = campaigns.borrow().get(&campaign_id).cloned() {
+                    campaign.vault_canister_id = Some(vault_id);
+                    campaign.status = CampaignStatus::Active;
+                    campaigns.borrow_mut().insert(campaign_id, campaign);
+                }
+            });
+            ic_cdk::println!("Campaign {} created with vault {}", campaign_id, vault_id.to_text());
+            Ok(campaign_id)
+        }
+        Err(e) => {
+            CAMPAIGNS.with(|campaigns| {
+                campaigns.borrow_mut().remove(&campaign_id);
+            });
+            Err(format!("Failed to create vault canister: {}", e))
+        }
+    }
+}
+
+async fn create_vault_canister(
+    _campaign_id: u64,
+    _metadata: CampaignMetadata,
+) -> Result<Principal, String> {
+    let settings = CanisterSettings {
+        controllers: Some(vec![ic_cdk::api::caller()]),
+        compute_allocation: None,
+        memory_allocation: None,
+        freezing_threshold: None,
+    };
+    let arg = CreateCanisterArgument {
+        settings: Some(settings),
+    };
+    match create_canister(arg, None).await {
+        Ok((canister_id_record, _)) => {
+            Ok(canister_id_record.canister_id)
+        }
+        Err(e) => {
+            Err(format!("Canister creation failed: {:?}", e))
+        }
+    }
+}
+
+#[query]
+fn get_campaign(campaign_id: u64) -> Option<CampaignMetadata> {
+    CAMPAIGNS.with(|campaigns| campaigns.borrow().get(&campaign_id).cloned())
+}
+
+#[query]
+fn get_campaigns_by_creator(creator: Principal) -> Vec<(u64, CampaignMetadata)> {
+    CAMPAIGNS.with(|campaigns| {
+        campaigns
+            .borrow()
+            .iter()
+            .filter(|(_, metadata)| metadata.creator == creator)
+            .map(|(k, v)| (*k, v.clone()))
+            .collect()
+    })
+}
+
+#[query]
+fn get_all_campaigns() -> Vec<(u64, CampaignMetadata)> {
+    CAMPAIGNS.with(|campaigns| {
+        campaigns
+            .borrow()
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect()
+    })
+}
+
+#[query]
+fn get_active_campaigns() -> Vec<(u64, CampaignMetadata)> {
+    CAMPAIGNS.with(|campaigns| {
+        campaigns
+            .borrow()
+            .iter()
+            .filter(|(_, metadata)| metadata.status == CampaignStatus::Active)
+            .map(|(k, v)| (*k, v.clone()))
+            .collect()
+    })
+}
+
+#[update]
+fn update_campaign_status(campaign_id: u64, status: CampaignStatus) -> Result<(), String> {
+    let caller = msg_caller();
+    CAMPAIGNS.with(|campaigns| {
+        if let Some(mut campaign) = campaigns.borrow().get(&campaign_id).cloned() {
+            if campaign.creator != caller {
+                return Err("Only campaign creator can update status".to_string());
+            }
+            campaign.status = status;
+            campaigns.borrow_mut().insert(campaign_id, campaign);
+            Ok(())
+        } else {
+            Err("Campaign not found".to_string())
+        }
+    })
 }
