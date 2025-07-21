@@ -1,14 +1,16 @@
-
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "./ComplianceModule.sol";
 
 /**
  * @title IPToken
- * @dev ERC-20 token with licensing capabilities
+ * @dev ERC-20 token with compliance and licensing
  */
-contract IPToken is ERC20, Ownable {
+contract IPToken is ERC20, Ownable, ReentrancyGuard {
     
     struct LicenseTerms {
         uint256 duration;
@@ -25,13 +27,30 @@ contract IPToken is ERC20, Ownable {
     address public originalCreator;
     uint256 public creationTimestamp;
     string public ipMetadataURI;
+    ComplianceModule public complianceModule;
     
     // License management
     mapping(uint256 => LicenseTerms) public licenseTemplates;
     uint256 public nextLicenseTemplateId = 1;
     
+    // Transfer restrictions
+    bool public transferRestricted = false;
+    mapping(address => bool) public authorizedTransferees;
+    
     // Events
     event LicenseTemplateCreated(uint256 indexed templateId, uint256 fee, bool exclusive);
+    event TransferRestrictionUpdated(bool restricted, address updatedBy);
+    
+    // Modifiers
+    modifier onlyCompliant(address _address) {
+        require(address(complianceModule) == address(0) || complianceModule.isCompliant(_address), "Not compliant");
+        _;
+    }
+    
+    modifier onlyFactory() {
+        require(msg.sender == factory, "Only factory");
+        _;
+    }
     
     constructor(
         string memory _name,
@@ -54,6 +73,20 @@ contract IPToken is ERC20, Ownable {
         _transferOwnership(_creator);
     }
     
+    function transfer(address to, uint256 amount) public override onlyCompliant(msg.sender) onlyCompliant(to) returns (bool) {
+        if (transferRestricted) {
+            require(authorizedTransferees[to] || to == owner(), "Unauthorized transfer");
+        }
+        return super.transfer(to, amount);
+    }
+    
+    function transferFrom(address from, address to, uint256 amount) public override onlyCompliant(from) onlyCompliant(to) returns (bool) {
+        if (transferRestricted) {
+            require(authorizedTransferees[to] || to == owner(), "Unauthorized transfer");
+        }
+        return super.transferFrom(from, to, amount);
+    }
+    
     function createLicenseTemplate(LicenseTerms memory _terms) external onlyOwner returns (uint256) {
         require(_terms.duration > 0, "Invalid duration");
         require(_terms.fee > 0, "Invalid fee");
@@ -65,7 +98,16 @@ contract IPToken is ERC20, Ownable {
         return templateId;
     }
     
-    function setMetadataURI(string memory _metadataURI) external onlyOwner {
-        ipMetadataURI = _metadataURI;
+    function setComplianceModule(address _complianceModule) external onlyFactory {
+        complianceModule = ComplianceModule(_complianceModule);
+    }
+    
+    function setTransferRestricted(bool _restricted) external onlyOwner {
+        transferRestricted = _restricted;
+        emit TransferRestrictionUpdated(_restricted, msg.sender);
+    }
+    
+    function setAuthorizedTransferee(address _transferee, bool _authorized) external onlyOwner {
+        authorizedTransferees[_transferee] = _authorized;
     }
 }
