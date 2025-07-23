@@ -22,3 +22,16 @@ pub struct CollectionMetadata {
     pub image: String,
     pub total_supply: u64,
 }
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct TransferArgs {
+    pub token_id: TokenId,
+    pub from: Principal,
+    pub to: Principal,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct ApprovalArgs {
+    pub token_id: TokenId,
+    pub approved: Principal,
+}
