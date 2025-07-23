@@ -1,0 +1,32 @@
+type CampaignMetadata = record {
+  title : text;
+  description : text;
+  image_url : text;
+  category : text;
+  target_amount : nat;
+  end_date : nat;
+};
+
+type Campaign = record {
+  id : nat;
+  creator : principal;
+  metadata : CampaignMetadata;
+  current_amount : nat;
+  backers_count : nat;
+  is_active : bool;
+  created_at : nat;
+};
+
+type Result = variant { Ok : text; Err : text };
+type Result_1 = variant { Ok : nat; Err : text };
+
+service : {
+  create_campaign : (CampaignMetadata) -> (Result_1);
+  fund_campaign : (nat, nat) -> (Result);
+  get_campaign : (nat) -> (opt Campaign) query;
+  get_all_campaigns : () -> (vec Campaign) query;
+  get_user_campaigns : (principal) -> (vec Campaign) query;
+  get_campaign_backers : (nat) -> (vec principal) query;
+  end_campaign : (nat) -> (Result);
+  withdraw_funds : (nat) -> (Result);
+}

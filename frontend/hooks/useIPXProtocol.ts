@@ -19,11 +19,11 @@ import {
 
 // IDL definitions for each canister (you'll need to generate these from your Candid files)
 import { idlFactory as vaultIDL } from '../src/declarations/vault';
-import { idlFactory as beamfiIDL } from '../src/declarations/beamfi_stream';
+import { idlFactory as beamfiIDL } from '../src/declarations/ipx-stream';
 import { idlFactory as campaignIDL } from '../src/declarations/campaign-factory';
-import { idlFactory as nftIDL } from '../src/declarations/nft_registry';
-import { idlFactory as daoIDL } from '../src/declarations/sns_dao';
-import { idlFactory as oracleIDL } from '../src/declarations/oracle_aggregator';
+import { idlFactory as nftIDL } from '../src/declarations/nft-registry';
+import { idlFactory as daoIDL } from '../src/declarations/ipx-dao';
+import { idlFactory as oracleIDL } from '../src/declarations/revenue-api-connector';
 
 export const useIPXProtocol = () => {
   const [authenticated, setAuthenticated] = useState(false);
