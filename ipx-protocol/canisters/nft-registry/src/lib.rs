@@ -1,5 +1,8 @@
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::cell::RefCell;
+use ic_cdk_macros::*;
 
 type TokenId = u64;
 
@@ -34,4 +37,25 @@ pub struct TransferArgs {
 pub struct ApprovalArgs {
     pub token_id: TokenId,
     pub approved: Principal,
+}
+
+
+thread_local! {
+    static TOKENS: RefCell<HashMap<TokenId, TokenMetadata>> = RefCell::new(HashMap::new());
+    static TOKEN_APPROVALS: RefCell<HashMap<TokenId, Principal>> = RefCell::new(HashMap::new());
+    static OPERATOR_APPROVALS: RefCell<HashMap<(Principal, Principal), bool>> = RefCell::new(HashMap::new());
+    static TOKEN_COUNTER: RefCell<TokenId> = RefCell::new(0);
+    static COLLECTION_METADATA: RefCell<CollectionMetadata> = RefCell::new(
+        CollectionMetadata {
+            name: "IPX Campaign NFTs".to_string(),
+            description: "NFTs representing investments in IPX Protocol campaigns".to_string(),
+            image: "https://ipx-protocol.com/collection-image.png".to_string(),
+            total_supply: 0,
+        }
+    );
+}
+
+#[init]
+fn init() {
+    ic_cdk::println!("NFT Registry (ICRC-7 compliant) initialized");
 }
