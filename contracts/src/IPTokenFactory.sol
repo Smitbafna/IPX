@@ -9,7 +9,8 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 
 /**
  * @title IPTokenFactory
- * @dev Factory with proof registration and compliance
+ * @dev Deploys new IP token contracts for each registered piece of intellectual property
+ * Mints fractional tokens linked to ownership proof and licensing metadata
  */
 contract IPTokenFactory is Ownable, ReentrancyGuard {
     using Counters for Counters.Counter;
@@ -30,7 +31,7 @@ contract IPTokenFactory is Ownable, ReentrancyGuard {
         address creator;
         string metadataURI;
         uint256 totalSupply;
-        uint256 royaltyRate;
+        uint256 royaltyRate; // In basis points (e.g., 500 = 5%)
         bytes32 proofHash;
         uint256 createdAt;
         bool isActive;
@@ -54,6 +55,11 @@ contract IPTokenFactory is Ownable, ReentrancyGuard {
         address indexed creator
     );
     
+    event TokenStatusUpdated(
+        uint256 indexed tokenId,
+        bool isActive
+    );
+    
     // Modifiers
     modifier onlyCompliant(address _address) {
         require(complianceModule.isCompliant(_address), "Address not compliant");
@@ -61,7 +67,7 @@ contract IPTokenFactory is Ownable, ReentrancyGuard {
     }
     
     modifier validRoyaltyRate(uint256 _royaltyRate) {
-        require(_royaltyRate <= 5000, "Royalty rate too high");
+        require(_royaltyRate <= 5000, "Royalty rate too high"); // Max 50%
         _;
     }
     
@@ -70,7 +76,13 @@ contract IPTokenFactory is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Creates a new IP token contract with compliance checks
+     * @dev Creates a new IP token contract with specified parameters
+     * @param _metadataURI URI pointing to IP metadata
+     * @param _supply Total supply of fractional tokens
+     * @param _royaltyRate Royalty rate in basis points
+     * @param _name Name of the IP token
+     * @param _symbol Symbol of the IP token
+     * @return tokenId The ID of the newly created token
      */
     function createIPToken(
         string memory _metadataURI,
@@ -114,7 +126,7 @@ contract IPTokenFactory is Ownable, ReentrancyGuard {
             metadataURI: _metadataURI,
             totalSupply: _supply,
             royaltyRate: _royaltyRate,
-            proofHash: bytes32(0),
+            proofHash: bytes32(0), // Will be set when proof is registered
             createdAt: block.timestamp,
             isActive: true
         });
@@ -135,7 +147,9 @@ contract IPTokenFactory is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Links on-chain token to off-chain IP proof
+     * @dev Links on-chain token to off-chain IP proof in registry
+     * @param _tokenId The ID of the token to link proof to
+     * @param _proofHash Hash of the IP proof document
      */
     function registerProof(uint256 _tokenId, bytes32 _proofHash) 
         external 
@@ -153,39 +167,87 @@ contract IPTokenFactory is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Gets token information by ID
+     * @dev Updates the active status of a token
+     * @param _tokenId The ID of the token to update
+     * @param _isActive New active status
      */
-    function getTokenInfo(uint256 _tokenId) external view returns (IPTokenInfo memory) {
+    function updateTokenStatus(uint256 _tokenId, bool _isActive) 
+        external 
+        onlyCompliant(msg.sender) 
+    {
+        require(_tokenId > 0 && _tokenId <= _tokenIdCounter.current(), "Invalid token ID");
+        require(tokenInfo[_tokenId].creator == msg.sender, "Not token creator");
+        
+        tokenInfo[_tokenId].isActive = _isActive;
+        
+        emit TokenStatusUpdated(_tokenId, _isActive);
+    }
+    
+    /**
+     * @dev Gets token information by ID
+     * @param _tokenId The ID of the token
+     * @return Token information struct
+     */
+    function getTokenInfo(uint256 _tokenId) 
+        external 
+        view 
+        returns (IPTokenInfo memory) 
+    {
         require(_tokenId > 0 && _tokenId <= _tokenIdCounter.current(), "Invalid token ID");
         return tokenInfo[_tokenId];
     }
     
     /**
      * @dev Gets token ID by proof hash
+     * @param _proofHash The proof hash to look up
+     * @return Token ID associated with the proof
      */
-    function getTokenByProof(bytes32 _proofHash) external view returns (uint256) {
+    function getTokenByProof(bytes32 _proofHash) 
+        external 
+        view 
+        returns (uint256) 
+    {
         return proofToToken[_proofHash];
     }
     
     /**
      * @dev Gets all tokens created by a specific creator
+     * @param _creator The creator address
+     * @return Array of token IDs
      */
-    function getCreatorTokens(address _creator) external view returns (uint256[] memory) {
+    function getCreatorTokens(address _creator) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
         return creatorTokens[_creator];
     }
     
     /**
      * @dev Gets the current token counter value
+     * @return Current token counter
      */
     function getCurrentTokenId() external view returns (uint256) {
         return _tokenIdCounter.current();
     }
     
     /**
-     * @dev Updates the compliance module address
+     * @dev Updates the compliance module address (only owner)
+     * @param _newComplianceModule New compliance module address
      */
-    function updateComplianceModule(address _newComplianceModule) external onlyOwner {
+    function updateComplianceModule(address _newComplianceModule) 
+        external 
+        onlyOwner 
+    {
         require(_newComplianceModule != address(0), "Invalid address");
         complianceModule = ComplianceModule(_newComplianceModule);
+    }
+    
+    /**
+     * @dev Emergency function to pause token creation (only owner)
+     */
+    function pauseFactory() external onlyOwner {
+        // Implementation for pausing factory operations
+        // This could involve setting a paused state variable
     }
 }
