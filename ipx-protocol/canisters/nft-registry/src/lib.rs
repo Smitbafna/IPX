@@ -59,3 +59,55 @@ thread_local! {
 fn init() {
     ic_cdk::println!("NFT Registry (ICRC-7 compliant) initialized");
 }
+
+
+#[query]
+fn icrc7_collection_metadata() -> CollectionMetadata {
+    COLLECTION_METADATA.with(|metadata| metadata.borrow().clone())
+}
+
+#[query]
+fn icrc7_name() -> String {
+    COLLECTION_METADATA.with(|metadata| metadata.borrow().name.clone())
+}
+
+#[query]
+fn icrc7_description() -> String {
+    COLLECTION_METADATA.with(|metadata| metadata.borrow().description.clone())
+}
+
+#[query]
+fn icrc7_total_supply() -> u64 {
+    TOKENS.with(|tokens| tokens.borrow().len() as u64)
+}
+
+#[query]
+fn icrc7_owner_of(token_id: TokenId) -> Option<Principal> {
+    TOKENS.with(|tokens| {
+        tokens.borrow().get(&token_id).map(|token| token.owner)
+    })
+}
+
+#[query]
+fn icrc7_balance_of(owner: Principal) -> u64 {
+    TOKENS.with(|tokens| {
+        tokens.borrow().iter()
+            .filter(|(_, token)| token.owner == owner)
+            .count() as u64
+    })
+}
+
+#[query]
+fn icrc7_tokens_of(owner: Principal) -> Vec<TokenId> {
+    TOKENS.with(|tokens| {
+        tokens.borrow().iter()
+            .filter(|(_, token)| token.owner == owner)
+            .map(|(token_id, _)| *token_id)
+            .collect()
+    })
+}
+
+#[query]
+fn icrc7_token_metadata(token_id: TokenId) -> Option<TokenMetadata> {
+    TOKENS.with(|tokens| tokens.borrow().get(&token_id).cloned())
+}
