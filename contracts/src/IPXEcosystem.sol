@@ -196,7 +196,111 @@ contract IPXEcosystem is Ownable, ReentrancyGuard {
      * @param _symbol Symbol of the IP token
      * @return tokenId The ID of the newly created token
      */
-   
+    function createIPToken(
+        string memory _metadataURI,
+        uint256 _supply,
+        uint256 _royaltyRate,
+        string memory _name,
+        string memory _symbol
+    ) 
+        external 
+        onlyActiveEcosystem 
+        nonReentrant 
+        returns (uint256 tokenId) 
+    {
+        // Create token through factory
+        tokenId = ipTokenFactory.createIPToken(
+            _metadataURI,
+            _supply,
+            _royaltyRate,
+            _name,
+            _symbol
+        );
+        
+        // Get token contract address
+        address tokenContract = ipTokenFactory.ipTokens(tokenId);
+        
+        // Set up token with ecosystem contracts
+        IPToken(tokenContract).setRoyaltyEngine(address(royaltyEngine));
+        IPToken(tokenContract).setComplianceModule(address(complianceModule));
+        
+        // Update stats
+        stats.totalTokensCreated++;
+        stats.lastUpdated = block.timestamp;
+        
+        emit TokenCreatedInEcosystem(
+            tokenId,
+            msg.sender,
+            tokenContract,
+            block.timestamp
+        );
+        
+        return tokenId;
+    }
+    
+    /**
+     * @dev Quick compliance verification for new users
+     * @param _user Address to verify
+     * @param _jurisdiction Legal jurisdiction
+     * @param _isAccreditedInvestor Whether user is accredited investor
+     */
+    function quickVerifyUser(
+        address _user,
+        string memory _jurisdiction,
+        bool _isAccreditedInvestor
+    ) external onlyOwner {
+        require(complianceModule.allowedJurisdictions(_jurisdiction), "Jurisdiction not allowed");
+        
+        complianceModule.verifyAddress(
+            _user,
+            "IPX_DEFAULT",
+            keccak256(abi.encodePacked(_user, block.timestamp)),
+            _jurisdiction,
+            ComplianceModule.RiskLevel.Low,
+            _isAccreditedInvestor
+        );
+        
+        stats.totalVerifiedUsers++;
+        stats.lastUpdated = block.timestamp;
+        
+        emit ComplianceVerifiedInEcosystem(_user, _jurisdiction, block.timestamp);
+    }
+    
+    /**
+     * @dev Get ecosystem overview
+     * @return Complete ecosystem statistics
+     */
+    function getEcosystemOverview() external view returns (
+        EcosystemStats memory ecosystemStats,
+        address[] memory contractAddresses,
+        bool[] memory statuses
+    ) {
+        ecosystemStats = stats;
+        
+        contractAddresses = new address[](4);
+        contractAddresses[0] = address(ipTokenFactory);
+        contractAddresses[1] = address(royaltyEngine);
+        contractAddresses[2] = address(licenseRegistry);
+        contractAddresses[3] = address(complianceModule);
+        
+        statuses = new bool[](3);
+        statuses[0] = ecosystemActive;
+        statuses[1] = emergencyPaused;
+        statuses[2] = hcsEnabled;
+        
+        return (ecosystemStats, contractAddresses, statuses);
+    }
+    
+    /**
+     * @dev Update ecosystem active status
+     * @param _active New active status
+     */
+    function setEcosystemActive(bool _active) external onlyOwner {
+        ecosystemActive = _active;
+        
+        emit EcosystemStatusUpdated(_active, msg.sender, block.timestamp);
+    }
+    
     /**
      * @dev Emergency pause toggle
      * @param _paused New pause status
