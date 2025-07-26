@@ -111,3 +111,92 @@ fn icrc7_tokens_of(owner: Principal) -> Vec<TokenId> {
 fn icrc7_token_metadata(token_id: TokenId) -> Option<TokenMetadata> {
     TOKENS.with(|tokens| tokens.borrow().get(&token_id).cloned())
 }
+
+
+use ic_cdk::api::{msg_caller, time};
+
+#[update]
+fn icrc7_transfer(args: TransferArgs) -> Result<TokenId, String> {
+    let caller = msg_caller();
+    let token = TOKENS.with(|tokens| tokens.borrow().get(&args.token_id).cloned());
+    match token {
+        Some(mut token_data) => {
+            if token_data.owner != caller && !is_approved(args.token_id, caller) {
+                return Err("Caller is not owner or approved".to_string());
+            }
+            if token_data.owner != args.from {
+                return Err("From address doesn't match token owner".to_string());
+            }
+            token_data.owner = args.to;
+            TOKENS.with(|tokens| {
+                tokens.borrow_mut().insert(args.token_id, token_data);
+            });
+            TOKEN_APPROVALS.with(|approvals| {
+                approvals.borrow_mut().remove(&args.token_id);
+            });
+            ic_cdk::println!("Token {} transferred from {} to {}", 
+                args.token_id, args.from.to_text(), args.to.to_text());
+            Ok(args.token_id)
+        }
+        None => Err("Token not found".to_string()),
+    }
+}
+
+fn is_approved(token_id: TokenId, caller: Principal) -> bool {
+    TOKEN_APPROVALS.with(|approvals| {
+        approvals.borrow().get(&token_id).map_or(false, |approved| *approved == caller)
+    })
+}
+
+#[update]
+fn icrc7_approve(args: ApprovalArgs) -> Result<TokenId, String> {
+    let caller = msg_caller();
+    let token = TOKENS.with(|tokens| tokens.borrow().get(&args.token_id).cloned());
+    match token {
+        Some(token_data) => {
+            if token_data.owner != caller {
+                return Err("Only token owner can approve".to_string());
+            }
+            TOKEN_APPROVALS.with(|approvals| {
+                approvals.borrow_mut().insert(args.token_id, args.approved);
+            });
+            Ok(args.token_id)
+        }
+        None => Err("Token not found".to_string()),
+    }
+}
+
+#[update]
+fn mint(
+    to: Principal,
+    campaign_id: u64,
+    vault_canister: Principal,
+    investment_amount: u64,
+    share_percentage: f64,
+    metadata_json: String,
+) -> Result<TokenId, String> {
+    let token_id = TOKEN_COUNTER.with(|counter| {
+        let current = *counter.borrow();
+        let next = current + 1;
+        *counter.borrow_mut() = next;
+        next
+    });
+    let token_metadata = TokenMetadata {
+        token_id,
+        owner: to,
+        campaign_id,
+        vault_canister,
+        investment_amount,
+        share_percentage,
+        metadata_json,
+        created_at: time(),
+    };
+    TOKENS.with(|tokens| {
+        tokens.borrow_mut().insert(token_id, token_metadata);
+    });
+    COLLECTION_METADATA.with(|metadata| {
+        metadata.borrow_mut().total_supply += 1;
+    });
+    ic_cdk::println!("NFT {} minted for {} (campaign {})", token_id, to.to_text(), campaign_id);
+    Ok(token_id)
+}
