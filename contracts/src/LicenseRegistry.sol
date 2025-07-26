@@ -7,7 +7,8 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 
 /**
  * @title LicenseRegistry
- * @dev License registry with management and revocation
+ * @dev On-chain record of all active and expired licenses
+ * Serves as a queryable proof of licensing status for investors and licensees
  */
 contract LicenseRegistry is Ownable, ReentrancyGuard {
     using Counters for Counters.Counter;
@@ -23,26 +24,36 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     
     struct License {
         uint256 licenseId;
-        address tokenContract;
-        address licensee;
-        address licensor;
-        uint256 startDate;
-        uint256 endDate;
-        uint256 templateId;
-        bytes32 termsHash;
-        LicenseStatus status;
-        uint256 fee;
-        uint256 createdAt;
-        uint256 lastUpdated;
-        string metadata;
+        address tokenContract;      // IP token contract address
+        address licensee;           // Address of the licensee
+        address licensor;           // Address of the licensor (token creator)
+        uint256 startDate;          // License start timestamp
+        uint256 endDate;            // License end timestamp
+        uint256 templateId;         // License template ID from IPToken
+        bytes32 termsHash;          // Hash of license terms
+        LicenseStatus status;       // Current license status
+        uint256 fee;                // License fee paid
+        uint256 createdAt;          // Creation timestamp
+        uint256 lastUpdated;        // Last status update timestamp
+        string metadata;            // Additional metadata URI
     }
     
-    // Mappings
+    // Mapping from license ID to license details
     mapping(uint256 => License) public licenses;
+    
+    // Mapping from token contract to array of license IDs
     mapping(address => uint256[]) public tokenLicenses;
+    
+    // Mapping from licensee to array of license IDs
     mapping(address => uint256[]) public licenseeLicenses;
+    
+    // Mapping from licensor to array of license IDs
     mapping(address => uint256[]) public licensorLicenses;
+    
+    // Authorized contracts that can register licenses
     mapping(address => bool) public authorizedRegistrars;
+    
+    // License revocation conditions and authorized revokers
     mapping(uint256 => mapping(address => bool)) public revokeAuthorizations;
     
     // Events
@@ -80,6 +91,11 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
         bool authorized
     );
     
+    event RevokeAuthorizationGranted(
+        uint256 indexed licenseId,
+        address indexed authorizedRevoker
+    );
+    
     // Modifiers
     modifier onlyAuthorizedRegistrar() {
         require(authorizedRegistrars[msg.sender], "Not authorized registrar");
@@ -103,11 +119,18 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     }
     
     constructor() {
+        // Owner is automatically authorized
         authorizedRegistrars[msg.sender] = true;
     }
     
     /**
-     * @dev Register a new license with enhanced details
+     * @dev Register a new license (only authorized registrars)
+     * @param _tokenContract Address of the IP token contract
+     * @param _licensee Address of the licensee
+     * @param _startDate License start timestamp
+     * @param _endDate License end timestamp
+     * @param _templateId License template ID
+     * @return licenseId ID of the newly registered license
      */
     function registerLicense(
         address _tokenContract,
@@ -115,7 +138,12 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
         uint256 _startDate,
         uint256 _endDate,
         uint256 _templateId
-    ) external onlyAuthorizedRegistrar nonReentrant returns (uint256 licenseId) {
+    ) 
+        external 
+        onlyAuthorizedRegistrar 
+        nonReentrant 
+        returns (uint256 licenseId) 
+    {
         require(_tokenContract != address(0), "Invalid token contract");
         require(_licensee != address(0), "Invalid licensee address");
         require(_startDate < _endDate, "Invalid date range");
@@ -124,13 +152,15 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
         _licenseIdCounter.increment();
         licenseId = _licenseIdCounter.current();
         
+        // Get licensor from token contract (assuming it's the owner)
         address licensor;
         try Ownable(_tokenContract).owner() returns (address _owner) {
             licensor = _owner;
         } catch {
-            licensor = msg.sender;
+            licensor = msg.sender; // Fallback to registrar
         }
         
+        // Create license record
         licenses[licenseId] = License({
             licenseId: licenseId,
             tokenContract: _tokenContract,
@@ -139,14 +169,15 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
             startDate: _startDate,
             endDate: _endDate,
             templateId: _templateId,
-            termsHash: bytes32(0),
+            termsHash: bytes32(0), // Will be set separately if needed
             status: LicenseStatus.Active,
-            fee: 0,
+            fee: 0, // Will be set by calling contract
             createdAt: block.timestamp,
             lastUpdated: block.timestamp,
             metadata: ""
         });
         
+        // Add to mappings for easy lookup
         tokenLicenses[_tokenContract].push(licenseId);
         licenseeLicenses[_licensee].push(licenseId);
         licensorLicenses[licensor].push(licenseId);
@@ -165,7 +196,9 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Update license fee
+     * @dev Update license fee (only authorized registrars)
+     * @param _licenseId License ID
+     * @param _fee License fee amount
      */
     function updateLicenseFee(uint256 _licenseId, uint256 _fee) 
         external 
@@ -178,6 +211,8 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     
     /**
      * @dev Set license terms hash
+     * @param _licenseId License ID
+     * @param _termsHash Hash of the license terms
      */
     function setLicenseTermsHash(uint256 _licenseId, bytes32 _termsHash)
         external
@@ -190,7 +225,9 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Revoke a license
+     * @dev Revoke a license under predefined breach conditions
+     * @param _licenseId License ID to revoke
+     * @param _reason Reason for revocation
      */
     function revokeLicense(uint256 _licenseId, string memory _reason) 
         external 
@@ -222,6 +259,8 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     
     /**
      * @dev Update license status
+     * @param _licenseId License ID
+     * @param _newStatus New status
      */
     function updateLicenseStatus(uint256 _licenseId, LicenseStatus _newStatus)
         external
@@ -233,6 +272,7 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
         
         require(oldStatus != _newStatus, "Status unchanged");
         
+        // Validate status transitions
         if (oldStatus == LicenseStatus.Revoked) {
             require(msg.sender == owner(), "Cannot change revoked status");
         }
@@ -245,11 +285,18 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     
     /**
      * @dev Check and update expired licenses
+     * @param _licenseId License ID to check
      */
-    function checkAndUpdateExpired(uint256 _licenseId) external validLicense(_licenseId) {
+    function checkAndUpdateExpired(uint256 _licenseId) 
+        external 
+        validLicense(_licenseId) 
+    {
         License storage license = licenses[_licenseId];
         
-        if (block.timestamp >= license.endDate && license.status == LicenseStatus.Active) {
+        if (
+            block.timestamp >= license.endDate && 
+            license.status == LicenseStatus.Active
+        ) {
             LicenseStatus oldStatus = license.status;
             license.status = LicenseStatus.Expired;
             license.lastUpdated = block.timestamp;
@@ -260,7 +307,9 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Grant revocation authorization
+     * @dev Grant revocation authorization to an address
+     * @param _licenseId License ID
+     * @param _authorizedRevoker Address to authorize
      */
     function grantRevokeAuthorization(uint256 _licenseId, address _authorizedRevoker)
         external
@@ -269,6 +318,131 @@ contract LicenseRegistry is Ownable, ReentrancyGuard {
     {
         require(_authorizedRevoker != address(0), "Invalid authorizer address");
         revokeAuthorizations[_licenseId][_authorizedRevoker] = true;
+        
+        emit RevokeAuthorizationGranted(_licenseId, _authorizedRevoker);
     }
     
     /**
+     * @dev Get license status
+     * @param _licenseId License ID
+     * @return Current license status
+     */
+    function getLicenseStatus(uint256 _licenseId) 
+        external 
+        view 
+        validLicense(_licenseId) 
+        returns (LicenseStatus) 
+    {
+        License memory license = licenses[_licenseId];
+        
+        // Check if license should be expired
+        if (
+            block.timestamp >= license.endDate && 
+            license.status == LicenseStatus.Active
+        ) {
+            return LicenseStatus.Expired;
+        }
+        
+        return license.status;
+    }
+    
+    /**
+     * @dev Get complete license information
+     * @param _licenseId License ID
+     * @return Complete license struct
+     */
+    function getLicense(uint256 _licenseId) 
+        external 
+        view 
+        validLicense(_licenseId) 
+        returns (License memory) 
+    {
+        return licenses[_licenseId];
+    }
+    
+    /**
+     * @dev Get all licenses for a token contract
+     * @param _tokenContract Token contract address
+     * @return Array of license IDs
+     */
+    function getTokenLicenses(address _tokenContract) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        return tokenLicenses[_tokenContract];
+    }
+    
+    /**
+     * @dev Get all licenses for a licensee
+     * @param _licensee Licensee address
+     * @return Array of license IDs
+     */
+    function getLicenseeLicenses(address _licensee) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        return licenseeLicenses[_licensee];
+    }
+    
+    /**
+     * @dev Get all licenses for a licensor
+     * @param _licensor Licensor address
+     * @return Array of license IDs
+     */
+    function getLicensorLicenses(address _licensor) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        return licensorLicenses[_licensor];
+    }
+    
+    /**
+     * @dev Get total license count
+     * @return Total number of licenses
+     */
+    function getTotalLicenses() external view returns (uint256) {
+        return _licenseIdCounter.current();
+    }
+    
+    /**
+     * @dev Authorize/deauthorize registrar (only owner)
+     * @param _registrar Registrar address
+     * @param _authorized Authorization status
+     */
+    function setAuthorizedRegistrar(address _registrar, bool _authorized) 
+        external 
+        onlyOwner 
+    {
+        require(_registrar != address(0), "Invalid registrar address");
+        authorizedRegistrars[_registrar] = _authorized;
+        
+        emit AuthorizedRegistrarUpdated(_registrar, _authorized);
+    }
+    
+    /**
+     * @dev Batch check license expiration for multiple licenses
+     * @param _licenseIds Array of license IDs to check
+     */
+    function batchCheckExpiration(uint256[] memory _licenseIds) external {
+        for (uint256 i = 0; i < _licenseIds.length; i++) {
+            if (_licenseIds[i] > 0 && _licenseIds[i] <= _licenseIdCounter.current()) {
+                License storage license = licenses[_licenseIds[i]];
+                
+                if (
+                    block.timestamp >= license.endDate && 
+                    license.status == LicenseStatus.Active
+                ) {
+                    LicenseStatus oldStatus = license.status;
+                    license.status = LicenseStatus.Expired;
+                    license.lastUpdated = block.timestamp;
+                    
+                    emit LicenseExpired(_licenseIds[i], block.timestamp);
+                    emit LicenseStatusUpdated(_licenseIds[i], oldStatus, LicenseStatus.Expired, msg.sender);
+                }
+            }
+        }
+    }
+}
