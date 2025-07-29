@@ -8,11 +8,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./IPToken.sol";
 import "./LicenseRegistry.sol";
 
-/**
- * @title RoyaltyEngine
- * @dev Automates calculation and distribution of royalties to token holders
- * Executes stablecoin payouts via Hedera-compatible payment channels
- */
+
 contract RoyaltyEngine is Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     
