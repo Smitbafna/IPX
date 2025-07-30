@@ -1,8 +1,9 @@
+use ic_cdk::api::{msg_caller, time};
 use candid::{CandidType, Principal};
+use ic_cdk_macros::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::cell::RefCell;
-use ic_cdk_macros::*;
 
 type TokenId = u64;
 
@@ -19,14 +20,6 @@ pub struct TokenMetadata {
 }
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
-pub struct CollectionMetadata {
-    pub name: String,
-    pub description: String,
-    pub image: String,
-    pub total_supply: u64,
-}
-
-#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct TransferArgs {
     pub token_id: TokenId,
     pub from: Principal,
@@ -39,6 +32,13 @@ pub struct ApprovalArgs {
     pub approved: Principal,
 }
 
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct CollectionMetadata {
+    pub name: String,
+    pub description: String,
+    pub image: String,
+    pub total_supply: u64,
+}
 
 thread_local! {
     static TOKENS: RefCell<HashMap<TokenId, TokenMetadata>> = RefCell::new(HashMap::new());
@@ -60,6 +60,7 @@ fn init() {
     ic_cdk::println!("NFT Registry (ICRC-7 compliant) initialized");
 }
 
+// ICRC-7 Standard Methods
 
 #[query]
 fn icrc7_collection_metadata() -> CollectionMetadata {
@@ -112,36 +113,45 @@ fn icrc7_token_metadata(token_id: TokenId) -> Option<TokenMetadata> {
     TOKENS.with(|tokens| tokens.borrow().get(&token_id).cloned())
 }
 
-
-use ic_cdk::api::{msg_caller, time};
-
 #[update]
 fn icrc7_transfer(args: TransferArgs) -> Result<TokenId, String> {
     let caller = msg_caller();
+    
+    // Verify ownership or approval
     let token = TOKENS.with(|tokens| tokens.borrow().get(&args.token_id).cloned());
+    
     match token {
         Some(mut token_data) => {
             if token_data.owner != caller && !is_approved(args.token_id, caller) {
                 return Err("Caller is not owner or approved".to_string());
             }
+            
             if token_data.owner != args.from {
                 return Err("From address doesn't match token owner".to_string());
             }
+            
+            // Update ownership
             token_data.owner = args.to;
+            
             TOKENS.with(|tokens| {
                 tokens.borrow_mut().insert(args.token_id, token_data);
             });
+            
+            // Clear approvals
             TOKEN_APPROVALS.with(|approvals| {
                 approvals.borrow_mut().remove(&args.token_id);
             });
+            
             ic_cdk::println!("Token {} transferred from {} to {}", 
                 args.token_id, args.from.to_text(), args.to.to_text());
+            
             Ok(args.token_id)
         }
         None => Err("Token not found".to_string()),
     }
 }
 
+// Helper function to check if a caller is approved for a token
 fn is_approved(token_id: TokenId, caller: Principal) -> bool {
     TOKEN_APPROVALS.with(|approvals| {
         approvals.borrow().get(&token_id).map_or(false, |approved| *approved == caller)
@@ -151,20 +161,48 @@ fn is_approved(token_id: TokenId, caller: Principal) -> bool {
 #[update]
 fn icrc7_approve(args: ApprovalArgs) -> Result<TokenId, String> {
     let caller = msg_caller();
+    
     let token = TOKENS.with(|tokens| tokens.borrow().get(&args.token_id).cloned());
+    
     match token {
         Some(token_data) => {
             if token_data.owner != caller {
                 return Err("Only token owner can approve".to_string());
             }
+            
             TOKEN_APPROVALS.with(|approvals| {
                 approvals.borrow_mut().insert(args.token_id, args.approved);
             });
+            
             Ok(args.token_id)
         }
         None => Err("Token not found".to_string()),
     }
 }
+
+#[query]
+fn icrc7_get_approved(token_id: TokenId) -> Option<Principal> {
+    TOKEN_APPROVALS.with(|approvals| approvals.borrow().get(&token_id).copied())
+}
+
+#[update]
+fn icrc7_set_approval_for_all(operator: Principal, approved: bool) -> Result<(), String> {
+    let caller = msg_caller();
+    
+    OPERATOR_APPROVALS.with(|approvals| {
+        approvals.borrow_mut().insert((caller, operator), approved);
+    });
+    
+    Ok(())
+}
+
+#[query]
+fn icrc7_is_approved_for_all(owner: Principal, operator: Principal) -> bool {
+    OPERATOR_APPROVALS.with(|approvals| {
+        approvals.borrow().get(&(owner, operator)).copied().unwrap_or(false)
+    })
+}
+
 
 #[update]
 fn mint(
@@ -175,12 +213,17 @@ fn mint(
     share_percentage: f64,
     metadata_json: String,
 ) -> Result<TokenId, String> {
+    let caller = msg_caller();
+    
+
+    
     let token_id = TOKEN_COUNTER.with(|counter| {
         let current = *counter.borrow();
         let next = current + 1;
         *counter.borrow_mut() = next;
         next
     });
+    
     let token_metadata = TokenMetadata {
         token_id,
         owner: to,
@@ -191,12 +234,18 @@ fn mint(
         metadata_json,
         created_at: time(),
     };
+    
     TOKENS.with(|tokens| {
         tokens.borrow_mut().insert(token_id, token_metadata);
     });
+    
+    // Update total supply
     COLLECTION_METADATA.with(|metadata| {
         metadata.borrow_mut().total_supply += 1;
     });
+    
     ic_cdk::println!("NFT {} minted for {} (campaign {})", token_id, to.to_text(), campaign_id);
+    
     Ok(token_id)
 }
+
