@@ -9,6 +9,9 @@ use ic_stable_structures::{
     DefaultMemoryImpl, StableBTreeMap,
 };
 
+use ic_cdk::api::{msg_caller, time};
+use ic_cdk::api::call::{call, CallResult};
+
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
@@ -87,3 +90,91 @@ fn init() {
     ic_cdk::println!("Vault initialized with default settings");
 }
 
+#[update]
+async fn invest(amount: u64) -> InvestmentResult {
+    let caller = msg_caller();
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            if state.current_funding >= state.funding_goal {
+                return InvestmentResult {
+                    success: false,
+                    nft_token_id: None,
+                    share_percentage: 0.0,
+                    message: "Campaign already fully funded".to_string(),
+                };
+            }
+            let remaining_funding = state.funding_goal - state.current_funding;
+            let actual_investment = amount.min(remaining_funding);
+            let share_percentage = (actual_investment as f64 / state.funding_goal as f64) * 100.0;
+            state.current_funding += actual_investment;
+            let backer_info = BackerInfo {
+                amount_invested: actual_investment,
+                nft_token_id: None,
+                share_percentage,
+                total_claimed: 0,
+                investment_timestamp: time(),
+            };
+            state.backers.insert(caller, backer_info.clone());
+            InvestmentResult {
+                success: true,
+                nft_token_id: None,
+                share_percentage,
+                message: format!("Investment of {} successful", actual_investment),
+            }
+        } else {
+            InvestmentResult {
+                success: false,
+                nft_token_id: None,
+                share_percentage: 0.0,
+                message: "Vault not initialized".to_string(),
+            }
+        }
+    })
+}
+
+#[update]
+async fn mint_nft_for_backer(backer: Principal) -> Result<u64, String> {
+    let backer_info = VAULT_STATE.with(|state_ref| {
+        let state_opt = state_ref.borrow();
+        if let Some(ref state) = *state_opt {
+            state.backers.get(&backer).cloned()
+        } else {
+            None
+        }
+    });
+    if let Some(info) = backer_info {
+        if let Some(nft_registry) = get_nft_registry_canister() {
+            let metadata = format!(
+                "{{\"campaign_id\":{},\"investment\":{},\"share\":{:.2}}}",
+                get_campaign_id(),
+                info.amount_invested,
+                info.share_percentage
+            );
+            let result: CallResult<(Result<u64, String>,)> = call(
+                nft_registry,
+                "mint",
+                (backer, metadata),
+            ).await;
+            match result {
+                Ok((Ok(token_id),)) => {
+                    VAULT_STATE.with(|state_ref| {
+                        let mut state_opt = state_ref.borrow_mut();
+                        if let Some(ref mut state) = *state_opt {
+                            if let Some(ref mut backer_info) = state.backers.get_mut(&backer) {
+                                backer_info.nft_token_id = Some(token_id);
+                            }
+                        }
+                    });
+                    Ok(token_id)
+                },
+                Ok((Err(e),)) => Err(e),
+                Err(e) => Err(format!("Failed to call NFT registry: {:?}", e)),
+            }
+        } else {
+            Err("NFT registry not configured".to_string())
+        }
+    } else {
+        Err("Backer not found".to_string())
+    }
+}
