@@ -35,12 +35,46 @@ pub struct RevenueData {
 }
 
 
-thread_local! {
-    static ORACLE_CONFIGS: RefCell<HashMap<u64, OracleConfig>> = RefCell::new(HashMap::new());
-    static REVENUE_HISTORY: RefCell<HashMap<(u64, u64), RevenueData>> = RefCell::new(HashMap::new());
-}
+se ic_cdk::api::msg_caller;
 
-#[init]
-fn init() {
-    ic_cdk::println!("Oracle Aggregator initialized");
+#[update]
+fn register_campaign_oracle(
+    campaign_id: u64,
+    vault_canister: Principal,
+    endpoints: Vec<ApiEndpoint>,
+    update_frequency: u64,
+) -> Result<(), String> {
+    let caller = msg_caller();
+    // Authorization check: only vault canister or campaign creator can register
+    if caller != vault_canister {
+        // Query vault canister for campaign creator
+        let creator_result: Result<(Principal,), _> = ic_cdk::api::call::call(
+            vault_canister,
+            "get_campaign_creator",
+            (campaign_id,)
+        ).await;
+        match creator_result {
+            Ok((creator,)) => {
+                if caller != creator {
+                    return Err("Unauthorized: Only vault or campaign creator can register oracle".to_string());
+                }
+            }
+            Err(_) => {
+                return Err("Failed to fetch campaign creator from vault canister".to_string());
+            }
+        }
+    }
+    let config = OracleConfig {
+        campaign_id,
+        vault_canister,
+        endpoints,
+        update_frequency,
+        last_update: 0,
+        is_active: true,
+    };
+    ORACLE_CONFIGS.with(|configs| {
+        configs.borrow_mut().insert(campaign_id, config.clone());
+    });
+    ic_cdk::println!("Oracle registered for campaign {}", campaign_id);
+    Ok(())
 }
