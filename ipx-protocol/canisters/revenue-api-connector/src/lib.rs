@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use ic_cdk_macros::*;
 
+use serde_json::Value;
+use ic_cdk::api::time;
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct OracleConfig {
     pub campaign_id: u64,
@@ -77,4 +79,42 @@ fn register_campaign_oracle(
     });
     ic_cdk::println!("Oracle registered for campaign {}", campaign_id);
     Ok(())
+}
+
+
+#[update]
+async fn fetch_revenue_data(campaign_id: u64) -> Result<Vec<RevenueData>, String> {
+    let config = ORACLE_CONFIGS.with(|configs| configs.borrow().get(&campaign_id).cloned());
+    match config {
+        Some(mut config) => {
+            if !config.is_active {
+                return Err("Oracle is not active for this campaign".to_string());
+            }
+            let mut results = Vec::new();
+            for endpoint in &config.endpoints {
+                match fetch_from_endpoint(campaign_id, endpoint).await {
+                    Ok(data) => {
+                        results.push(data.clone());
+                        let key = (campaign_id, data.timestamp);
+                        REVENUE_HISTORY.with(|history| {
+                            history.borrow_mut().insert(key, data);
+                        });
+                    }
+                    Err(e) => {
+                        ic_cdk::println!("Failed to fetch from {}: {}", endpoint.platform, e);
+                    }
+                }
+            }
+            config.last_update = time();
+            ORACLE_CONFIGS.with(|configs| {
+                configs.borrow_mut().insert(campaign_id, config.clone());
+            });
+            if !results.is_empty() {
+                let total_revenue: u64 = results.iter().map(|r| r.amount).sum();
+                let _ = update_vault_revenue(config.vault_canister, total_revenue).await;
+            }
+            Ok(results)
+        }
+        None => Err("Oracle not configured for this campaign".to_string()),
+    }
 }
