@@ -9,9 +9,6 @@ use ic_stable_structures::{
     DefaultMemoryImpl, StableBTreeMap,
 };
 
-use ic_cdk::api::{msg_caller, time};
-use ic_cdk::api::call::{call, CallResult};
-
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
@@ -93,9 +90,11 @@ fn init() {
 #[update]
 async fn invest(amount: u64) -> InvestmentResult {
     let caller = msg_caller();
+    
     VAULT_STATE.with(|state_ref| {
         let mut state_opt = state_ref.borrow_mut();
         if let Some(ref mut state) = *state_opt {
+           
             if state.current_funding >= state.funding_goal {
                 return InvestmentResult {
                     success: false,
@@ -104,10 +103,15 @@ async fn invest(amount: u64) -> InvestmentResult {
                     message: "Campaign already fully funded".to_string(),
                 };
             }
+           
             let remaining_funding = state.funding_goal - state.current_funding;
             let actual_investment = amount.min(remaining_funding);
             let share_percentage = (actual_investment as f64 / state.funding_goal as f64) * 100.0;
+            
+         
             state.current_funding += actual_investment;
+            
+          
             let backer_info = BackerInfo {
                 amount_invested: actual_investment,
                 nft_token_id: None,
@@ -115,10 +119,12 @@ async fn invest(amount: u64) -> InvestmentResult {
                 total_claimed: 0,
                 investment_timestamp: time(),
             };
+            
             state.backers.insert(caller, backer_info.clone());
+            
             InvestmentResult {
                 success: true,
-                nft_token_id: None,
+                nft_token_id: None, 
                 share_percentage,
                 message: format!("Investment of {} successful", actual_investment),
             }
@@ -135,6 +141,7 @@ async fn invest(amount: u64) -> InvestmentResult {
 
 #[update]
 async fn mint_nft_for_backer(backer: Principal) -> Result<u64, String> {
+   
     let backer_info = VAULT_STATE.with(|state_ref| {
         let state_opt = state_ref.borrow();
         if let Some(ref state) = *state_opt {
@@ -143,7 +150,9 @@ async fn mint_nft_for_backer(backer: Principal) -> Result<u64, String> {
             None
         }
     });
+    
     if let Some(info) = backer_info {
+        
         if let Some(nft_registry) = get_nft_registry_canister() {
             let metadata = format!(
                 "{{\"campaign_id\":{},\"investment\":{},\"share\":{:.2}}}",
@@ -151,13 +160,16 @@ async fn mint_nft_for_backer(backer: Principal) -> Result<u64, String> {
                 info.amount_invested,
                 info.share_percentage
             );
+            
             let result: CallResult<(Result<u64, String>,)> = call(
                 nft_registry,
                 "mint",
                 (backer, metadata),
             ).await;
+            
             match result {
                 Ok((Ok(token_id),)) => {
+            
                     VAULT_STATE.with(|state_ref| {
                         let mut state_opt = state_ref.borrow_mut();
                         if let Some(ref mut state) = *state_opt {
@@ -177,4 +189,171 @@ async fn mint_nft_for_backer(backer: Principal) -> Result<u64, String> {
     } else {
         Err("Backer not found".to_string())
     }
+}
+
+#[update]
+fn update_revenue(amount: u64, source: String, verified: bool) -> Result<(), String> {
+    
+    let caller = msg_caller();
+    
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            let source_clone = source.clone();
+            
+            let revenue_update = RevenueUpdate {
+                amount,
+                source,
+                timestamp: time(),
+                oracle_verification: verified,
+            };
+            
+            state.total_revenue += amount;
+            state.revenue_history.push(revenue_update);
+            
+            ic_cdk::println!("Revenue updated: {} from {}", amount, source_clone);
+            Ok(())
+        } else {
+            Err("Vault not initialized".to_string())
+        }
+    })
+}
+
+#[update]
+async fn distribute_payouts() -> Result<Vec<(Principal, u64)>, String> {
+    let mut payouts = Vec::new();
+    
+    VAULT_STATE.with(|state_ref| {
+        let state_opt = state_ref.borrow();
+        if let Some(ref state) = *state_opt {
+            let distributable_revenue = (state.total_revenue * state.revenue_share_percentage as u64) / 100;
+            
+            for (backer, info) in &state.backers {
+                let backer_share = (distributable_revenue as f64 * info.share_percentage / 100.0) as u64;
+                let claimable = backer_share - info.total_claimed;
+                
+                if claimable > 0 {
+                    payouts.push((*backer, claimable));
+                }
+            }
+        }
+    });
+    
+    
+    if let Some(stream_canister) = get_stream_canister() {
+        let result: CallResult<(Result<(), String>,)> = call(
+            stream_canister,
+            "create_streams",
+            (payouts.clone(),),
+        ).await;
+        
+        match result {
+            Ok((Ok(()),)) => {
+                
+                VAULT_STATE.with(|state_ref| {
+                    let mut state_opt = state_ref.borrow_mut();
+                    if let Some(ref mut state) = *state_opt {
+                        for (backer, amount) in &payouts {
+                            if let Some(ref mut info) = state.backers.get_mut(backer) {
+                                info.total_claimed += amount;
+                            }
+                        }
+                    }
+                });
+                Ok(payouts)
+            },
+            Ok((Err(e),)) => Err(e),
+            Err(e) => Err(format!("Failed to create streams: {:?}", e)),
+        }
+    } else {
+        Err("Stream canister not configured".to_string())
+    }
+}
+
+
+fn get_campaign_id() -> u64 {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().as_ref().map(|s| s.campaign_id).unwrap_or(0)
+    })
+}
+
+fn get_nft_registry_canister() -> Option<Principal> {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().as_ref().and_then(|s| s.nft_registry_canister)
+    })
+}
+
+fn get_stream_canister() -> Option<Principal> {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().as_ref().and_then(|s| s.stream_canister)
+    })
+}
+
+#[query]
+fn get_vault_state() -> Option<VaultState> {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().clone()
+    })
+}
+
+#[query]
+fn get_backer_info(backer: Principal) -> Option<BackerInfo> {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().as_ref().and_then(|s| s.backers.get(&backer).cloned())
+    })
+}
+
+#[query]
+fn get_funding_progress() -> (u64, u64, f64) {
+    VAULT_STATE.with(|state_ref| {
+        if let Some(ref state) = *state_ref.borrow() {
+            let percentage = (state.current_funding as f64 / state.funding_goal as f64) * 100.0;
+            (state.current_funding, state.funding_goal, percentage)
+        } else {
+            (0, 0, 0.0)
+        }
+    })
+}
+
+#[update]
+fn set_canister_refs(
+    nft_registry: Option<Principal>,
+    stream: Option<Principal>,
+    oracle: Option<Principal>,
+) -> Result<(), String> {
+    let caller = msg_caller();
+    
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            if state.creator != caller {
+                return Err("Only creator can set canister references".to_string());
+            }
+            
+            if let Some(nft) = nft_registry {
+                state.nft_registry_canister = Some(nft);
+            }
+            if let Some(stream) = stream {
+                state.stream_canister = Some(stream);
+            }
+            if let Some(oracle) = oracle {
+                state.oracle_canister = Some(oracle);
+            }
+            
+            Ok(())
+        } else {
+            Err("Vault not initialized".to_string())
+        }
+    })
+}
+
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct CampaignMetadata {
+    pub creator: Principal,
+    pub title: String,
+    pub description: String,
+    pub funding_goal: u64,
+    pub revenue_share_percentage: u8,
+    pub oracle_endpoints: Vec<String>,
 }
