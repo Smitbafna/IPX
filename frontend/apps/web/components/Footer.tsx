@@ -8,7 +8,7 @@ const Footer = () => {
       // Handle newsletter subscription
       console.log('Subscribing email:', email);
       setEmail('');
-      alert('Subscribed to ghostly updates! 👻');
+      alert('Subscribed to IPX updates! �');
     }
   };
 
@@ -25,7 +25,7 @@ const Footer = () => {
             <path
               d="M 40 0 L 0 0 0 40"
               fill="none"
-              stroke="rgb(147 51 234 / 0.3)"
+              stroke="rgb(139 92 246 / 0.3)"
               strokeWidth="0.5"
             />
           </pattern>
@@ -59,7 +59,7 @@ const Footer = () => {
           50% { transform: translateY(-10px) rotate(5deg); }
         }
         
-        .floating-ghost {
+        .floating-icon {
           animation: float 4s ease-in-out infinite;
         }
       `}</style>
@@ -70,12 +70,12 @@ const Footer = () => {
         <SubtleGrid />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-purple-500/5 to-transparent" />
         
-        {/* Floating Ghost Particles */}
+        {/* Floating IP Icons */}
         <div className="absolute inset-0 pointer-events-none">
           {[...Array(8)].map((_, i) => (
             <div
               key={i}
-              className="absolute text-2xl opacity-10 floating-ghost"
+              className="absolute text-2xl opacity-10 floating-icon"
               style={{
                 left: `${10 + (i * 12)}%`,
                 top: `${20 + (i % 4) * 20}%`,
@@ -83,7 +83,7 @@ const Footer = () => {
                 animationDuration: `${4 + (i % 3)}s`
               }}
             >
-              {['👻', '🔮', '💀', '🌫️', '⚡', '🔥', '🌙', '✨'][i]}
+              {['�', '�', '🪙', '💎', '⚡', '🔥', '�', '✨'][i]}
             </div>
           ))}
         </div>
@@ -100,13 +100,13 @@ const Footer = () => {
                 className="text-3xl font-bold gradient-text mb-4"
                 style={{ fontFamily: "Holtwood One SC, serif" }}
               >
-                👻 Ghost NFTs
+                � IPX Platform
               </h3>
               <p 
                 className="text-gray-300 mb-6 leading-relaxed"
                 style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
               >
-                Enter the supernatural realm where ghosts possess wallets and create blockchain chaos. Summon, battle, and breed your ghostly companions.
+                Transform your intellectual property into tradeable tokens. Create, invest, and earn royalties from IP on the Hedera blockchain.
               </p>
             </div>
             
@@ -123,160 +123,160 @@ const Footer = () => {
                 </svg>
               </a>
               <a href="#" className="w-10 h-10 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 group">
-                <span className="text-purple-300 text-lg group-hover:animate-spin">👻</span>
+                <span className="text-purple-300 text-lg group-hover:animate-spin">�</span>
               </a>
               <a href="#" className="w-10 h-10 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110 group">
-                <span className="text-purple-300 text-lg group-hover:animate-pulse">🔮</span>
+                <span className="text-purple-300 text-lg group-hover:animate-pulse">�</span>
               </a>
             </div>
           </div>
 
-          {/* Ghost Features */}
+          {/* Platform Features */}
           <div>
             <h4 
               className="text-lg font-semibold text-white mb-6"
               style={{ fontFamily: "Holtwood One SC, serif" }}
             >
-              👻 Ghost Features
+              � Platform Features
             </h4>
             <ul className="space-y-3">
               <li>
                 <a 
-                  href="/summon-ghost" 
+                  href="/create" 
                   className="text-gray-300 hover:text-purple-300 transition-colors flex items-center gap-2 group"
                   style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
                 >
-                  <span className="group-hover:animate-bounce">👻</span>
-                  Summon Ghosts
+                  <span className="group-hover:animate-bounce">🪙</span>
+                  Create IP Tokens
                 </a>
               </li>
               <li>
                 <a 
-                  href="/map" 
+                  href="/marketplace" 
                   className="text-gray-300 hover:text-purple-300 transition-colors flex items-center gap-2 group"
                   style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
                 >
-                  <span className="group-hover:animate-spin">🗺️</span>
-                  Haunting Map
+                  <span className="group-hover:animate-spin">🏪</span>
+                  IP Marketplace
                 </a>
               </li>
               <li>
                 <a 
-                  href="/meme-mating" 
+                  href="/license" 
                   className="text-gray-300 hover:text-purple-300 transition-colors flex items-center gap-2 group"
                   style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
                 >
-                  <span className="group-hover:animate-pulse">💞</span>
-                  Meme Mating
+                  <span className="group-hover:animate-pulse">�</span>
+                  License Management
                 </a>
               </li>
               <li>
                 <a 
-                  href="/map" 
+                  href="/portfolio" 
                   className="text-gray-300 hover:text-purple-300 transition-colors flex items-center gap-2 group"
                   style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
                 >
-                  <span className="group-hover:animate-bounce">🔥</span>
-                  Exorcism Challenges
+                  <span className="group-hover:animate-bounce">�</span>
+                  Portfolio Tracking
                 </a>
               </li>
               <li>
                 <a 
-                  href="/battles" 
+                  href="/profile" 
                   className="text-gray-300 hover:text-purple-300 transition-colors flex items-center gap-2 group"
                   style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
                 >
-                  <span className="group-hover:animate-spin">⚔️</span>
-                  Ghost Battles
+                  <span className="group-hover:animate-spin">⚙️</span>
+                  Account Settings
                 </a>
               </li>
               <li>
                 <a 
-                  href="/achievements" 
+                  href="/analytics" 
                   className="text-gray-300 hover:text-purple-300 transition-colors flex items-center gap-2 group"
                   style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
                 >
-                  <span className="group-hover:animate-pulse">🏆</span>
-                  Achievements
+                  <span className="group-hover:animate-pulse">📈</span>
+                  Performance Analytics
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Ghost Types */}
+          {/* IP Categories */}
           <div>
             <h4 
               className="text-lg font-semibold text-white mb-6"
               style={{ fontFamily: "Holtwood One SC, serif" }}
             >
-              🌟 Ghost Types
+              💎 IP Categories
             </h4>
             <ul className="space-y-3">
               <li className="flex items-center gap-3">
-                <span className="text-2xl">👻</span>
+                <span className="text-2xl">🎵</span>
                 <div>
                   <div 
                     className="text-blue-300 font-medium"
                     style={{ fontFamily: "Holtwood One SC, serif" }}
                   >
-                    Whisper
+                    Music & Audio
                   </div>
                   <div 
                     className="text-xs text-gray-400"
                     style={{ fontFamily: "Holtwood One SC, serif" }}
                   >
-                    Silent Possession
+                    Tracks, Albums, Beats
                   </div>
                 </div>
               </li>
               <li className="flex items-center gap-3">
-                <span className="text-2xl">🔮</span>
+                <span className="text-2xl">🎨</span>
                 <div>
                   <div 
                     className="text-purple-300 font-medium"
                     style={{ fontFamily: "Holtwood One SC, serif" }}
                   >
-                    Poltergeist
+                    Digital Art
                   </div>
                   <div 
                     className="text-xs text-gray-400"
                     style={{ fontFamily: "Holtwood One SC, serif" }}
                   >
-                    Asset Disruption
+                    Artwork, Graphics, NFTs
                   </div>
                 </div>
               </li>
               <li className="flex items-center gap-3">
-                <span className="text-2xl">💀</span>
-                <div>
-                  <div 
-                    className="text-red-300 font-medium"
-                    style={{ fontFamily: "Holtwood One SC, serif" }}
-                  >
-                    Banshee
-                  </div>
-                  <div 
-                    className="text-xs text-gray-400"
-                    style={{ fontFamily: "Holtwood One SC, serif" }}
-                  >
-                    Network Haunting
-                  </div>
-                </div>
-              </li>
-              <li className="flex items-center gap-3">
-                <span className="text-2xl">🌫️</span>
+                <span className="text-2xl">�</span>
                 <div>
                   <div 
                     className="text-green-300 font-medium"
                     style={{ fontFamily: "Holtwood One SC, serif" }}
                   >
-                    Wraith
+                    Software
                   </div>
                   <div 
                     className="text-xs text-gray-400"
                     style={{ fontFamily: "Holtwood One SC, serif" }}
                   >
-                    Soul Binding
+                    Code, Algorithms, Apps
+                  </div>
+                </div>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-2xl">📖</span>
+                <div>
+                  <div 
+                    className="text-yellow-300 font-medium"
+                    style={{ fontFamily: "Holtwood One SC, serif" }}
+                  >
+                    Written Content
+                  </div>
+                  <div 
+                    className="text-xs text-gray-400"
+                    style={{ fontFamily: "Holtwood One SC, serif" }}
+                  >
+                    Books, Articles, Scripts
                   </div>
                 </div>
               </li>
@@ -289,13 +289,13 @@ const Footer = () => {
               className="text-lg font-semibold text-white mb-6"
               style={{ fontFamily: "Holtwood One SC, serif" }}
             >
-              📮 Supernatural Updates
+              📮 Platform Updates
             </h4>
             <p 
               className="text-gray-300 mb-4 leading-relaxed"
               style={{ fontFamily: "Holtwood One SC, serif", letterSpacing: "0.03rem" }}
             >
-              Get haunted with the latest ghost drops, breeding events, and supernatural rewards.
+              Stay updated with the latest IP tokenization features, market insights, and new creator opportunities.
             </p>
             <div className="space-y-3">
               <div className="flex">
@@ -312,7 +312,7 @@ const Footer = () => {
                   className="px-6 py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white font-semibold rounded-r-lg hover:from-purple-700 hover:to-violet-700 transition-all duration-300 hover:scale-105 flex items-center gap-2"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  <span className="animate-pulse">👻</span>
+                  <span className="animate-pulse">�</span>
                   Subscribe
                 </button>
               </div>
@@ -320,7 +320,7 @@ const Footer = () => {
                 className="text-xs text-gray-400"
                 style={{ fontFamily: "Holtwood One SC, serif" }}
               >
-                No spam, only ghostly goodness. Unsubscribe anytime.
+                No spam, only valuable IP insights. Unsubscribe anytime.
               </p>
             </div>
           </div>
@@ -336,21 +336,21 @@ const Footer = () => {
                 style={{ fontFamily: "Holtwood One SC, serif" }}
               >
                 <span className="animate-pulse">📞</span>
-                Contact the Spirits
+                Contact Our Team
               </h5>
               <div className="space-y-2 text-sm text-gray-300">
                 <div className="flex items-center space-x-2">
                   <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <span style={{ fontFamily: "Holtwood One SC, serif" }}>haunt@ghostnfts.io</span>
+                  <span style={{ fontFamily: "Holtwood One SC, serif" }}>support@ipx.io</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  <span style={{ fontFamily: "Holtwood One SC, serif" }}>Haunting Globally</span>
+                  <span style={{ fontFamily: "Holtwood One SC, serif" }}>Global IP Platform</span>
                 </div>
               </div>
             </div>
@@ -362,7 +362,7 @@ const Footer = () => {
                 style={{ fontFamily: "Holtwood One SC, serif" }}
               >
                 <span className="animate-bounce">🆘</span>
-                Ghost Support
+                Support Center
               </h5>
               <div className="space-y-2 text-sm">
                 <a 
@@ -370,28 +370,28 @@ const Footer = () => {
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Spirit Guide Center
+                  Creator Guide
                 </a>
                 <a 
                   href="#" 
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Exorcism Support
+                  Investor Resources
                 </a>
                 <a 
                   href="#" 
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Report a Haunting
+                  Report an Issue
                 </a>
                 <a 
                   href="#" 
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Ghost Security
+                  Platform Security
                 </a>
               </div>
             </div>
@@ -403,7 +403,7 @@ const Footer = () => {
                 style={{ fontFamily: "Holtwood One SC, serif" }}
               >
                 <span className="animate-pulse">⚖️</span>
-                Supernatural Law
+                Legal & Compliance
               </h5>
               <div className="space-y-2 text-sm">
                 <a 
@@ -411,28 +411,28 @@ const Footer = () => {
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Spirit Privacy Policy
+                  Privacy Policy
                 </a>
                 <a 
                   href="#" 
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Haunting Terms
+                  Terms of Service
                 </a>
                 <a 
                   href="#" 
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Ghost Code of Conduct
+                  IP Protection Policy
                 </a>
                 <a 
                   href="#" 
                   className="block text-gray-300 hover:text-purple-300 transition-colors"
                   style={{ fontFamily: "Holtwood One SC, serif" }}
                 >
-                  Blockchain Compliance
+                  Regulatory Compliance
                 </a>
               </div>
             </div>
@@ -445,8 +445,8 @@ const Footer = () => {
             className="text-sm text-gray-400 flex items-center gap-2"
             style={{ fontFamily: "Holtwood One SC, serif" }}
           >
-            <span className="animate-pulse">👻</span>
-            © 2025 Ghost NFTs. All spirits reserved.
+            <span className="animate-pulse">�</span>
+            © 2025 IPX Platform. All intellectual property rights reserved.
           </div>
           <div 
             className="flex items-center space-x-4 text-sm text-gray-400"
@@ -454,8 +454,8 @@ const Footer = () => {
           >
             <span className="flex items-center gap-2">
               Built with 
-              <span className="animate-pulse text-purple-400">🔮</span> 
-              for the supernatural community
+              <span className="animate-pulse text-purple-400">�</span> 
+              for the creator economy
             </span>
           </div>
         </div>
