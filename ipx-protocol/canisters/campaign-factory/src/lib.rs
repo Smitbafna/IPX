@@ -1,12 +1,11 @@
-use candid::{CandidType, Principal};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::cell::RefCell;
-use ic_cdk_macros::*;
-
 use ic_cdk::api::{msg_caller, time};
 use ic_cdk::api::management_canister::main::{create_canister, CreateCanisterArgument, CanisterSettings, CanisterId};
 use ic_cdk::api::call::call;
+use candid::{CandidType, Principal};
+use ic_cdk_macros::*;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::cell::RefCell;
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct CampaignMetadata {
@@ -30,7 +29,6 @@ pub enum CampaignStatus {
     Cancelled,
 }
 
-
 thread_local! {
     static CAMPAIGN_COUNTER: RefCell<u64> = RefCell::new(0);
     static CAMPAIGNS: RefCell<HashMap<u64, CampaignMetadata>> = RefCell::new(HashMap::new());
@@ -41,7 +39,6 @@ fn init() {
     ic_cdk::println!("Campaign Factory initialized");
 }
 
-
 #[update]
 async fn create_campaign(
     title: String,
@@ -51,15 +48,20 @@ async fn create_campaign(
     oracle_endpoints: Vec<String>,
 ) -> Result<u64, String> {
     let caller = msg_caller();
+    
     if revenue_share_percentage == 0 || revenue_share_percentage > 100 {
         return Err("Revenue share must be between 1-100%".to_string());
     }
+    
+    // Generate unique campaign ID
     let campaign_id = CAMPAIGN_COUNTER.with(|counter| {
         let current = *counter.borrow();
         let next = current + 1;
         *counter.borrow_mut() = next;
         next
     });
+    
+    // Create campaign metadata
     let metadata = CampaignMetadata {
         creator: caller,
         title: title.clone(),
@@ -71,11 +73,16 @@ async fn create_campaign(
         created_at: time(),
         status: CampaignStatus::Draft,
     };
+    
+    // Store campaign
     CAMPAIGNS.with(|campaigns| {
         campaigns.borrow_mut().insert(campaign_id, metadata.clone());
     });
+    
+    // Create vault canister for this campaign
     match create_vault_canister(campaign_id, metadata).await {
         Ok(vault_id) => {
+            // Update campaign with vault canister ID
             CAMPAIGNS.with(|campaigns| {
                 if let Some(mut campaign) = campaigns.borrow().get(&campaign_id).cloned() {
                     campaign.vault_canister_id = Some(vault_id);
@@ -83,10 +90,12 @@ async fn create_campaign(
                     campaigns.borrow_mut().insert(campaign_id, campaign);
                 }
             });
+            
             ic_cdk::println!("Campaign {} created with vault {}", campaign_id, vault_id.to_text());
             Ok(campaign_id)
         }
         Err(e) => {
+            // Remove campaign if vault creation failed
             CAMPAIGNS.with(|campaigns| {
                 campaigns.borrow_mut().remove(&campaign_id);
             });
@@ -99,15 +108,20 @@ async fn create_vault_canister(
     _campaign_id: u64,
     _metadata: CampaignMetadata,
 ) -> Result<Principal, String> {
+    
+    // Set up canister settings (optional, can be customized)
     let settings = CanisterSettings {
         controllers: Some(vec![ic_cdk::api::caller()]),
         compute_allocation: None,
         memory_allocation: None,
         freezing_threshold: None,
     };
+
     let arg = CreateCanisterArgument {
         settings: Some(settings),
     };
+
+    // Create the canister
     match create_canister(arg, None).await {
         Ok((canister_id_record, _)) => {
             Ok(canister_id_record.canister_id)
@@ -161,11 +175,13 @@ fn get_active_campaigns() -> Vec<(u64, CampaignMetadata)> {
 #[update]
 fn update_campaign_status(campaign_id: u64, status: CampaignStatus) -> Result<(), String> {
     let caller = msg_caller();
+    
     CAMPAIGNS.with(|campaigns| {
         if let Some(mut campaign) = campaigns.borrow().get(&campaign_id).cloned() {
             if campaign.creator != caller {
                 return Err("Only campaign creator can update status".to_string());
             }
+            
             campaign.status = status;
             campaigns.borrow_mut().insert(campaign_id, campaign);
             Ok(())
