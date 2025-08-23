@@ -97,7 +97,7 @@ export const MyNFTs = () => {
       {nfts.length === 0 ? (
         <div className="text-center py-12">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">🎫</span>
+            <span className="text-2xl font-bold">NFT</span>
           </div>
           <p className="text-gray-600 mb-2">No NFT receipts yet</p>
           <p className="text-gray-500 text-sm">Fund a campaign to receive your first NFT receipt!</p>
@@ -109,41 +109,35 @@ export const MyNFTs = () => {
               {/* NFT Visual */}
               <div className="bg-gradient-to-br from-blue-500 to-purple-600 h-48 flex items-center justify-center">
                 <div className="text-center text-white">
-                  <div className="text-4xl mb-2">🎫</div>
+                  <div className="text-2xl font-bold mb-2">NFT</div>
                   <div className="text-sm font-semibold">NFT Receipt #{nft.id}</div>
                 </div>
               </div>
-              
               {/* NFT Details */}
               <div className="p-4">
                 <h3 className="font-bold text-gray-900 mb-2">{nft.campaign_title}</h3>
-                
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Contribution:</span>
                     <span className="font-semibold text-blue-600">{formatICP(nft.contribution_amount)} ICP</span>
                   </div>
-                  
                   <div className="flex justify-between">
                     <span className="text-gray-600">Revenue Share:</span>
                     <span className="font-semibold text-green-600">{nft.revenue_share}%</span>
                   </div>
-                  
                   <div className="flex justify-between">
                     <span className="text-gray-600">Date:</span>
                     <span className="text-gray-900">{formatDate(nft.timestamp)}</span>
                   </div>
-                  
                   <div className="flex justify-between">
                     <span className="text-gray-600">Campaign ID:</span>
                     <span className="text-gray-900">#{nft.campaign_id}</span>
                   </div>
                 </div>
-
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <div className="bg-green-50 p-3 rounded-lg">
                     <p className="text-xs text-green-800">
-                      ✅ This NFT represents your ownership stake and entitles you to {nft.revenue_share}% 
+                      This NFT represents your ownership stake and entitles you to {nft.revenue_share}% 
                       of future revenue from this campaign.
                     </p>
                   </div>
@@ -157,6 +151,7 @@ export const MyNFTs = () => {
       {message && (
         <div className="mt-6 p-4 bg-red-100 border border-red-300 rounded-lg">
           <p className="text-sm text-red-800">{message}</p>
+          <pre className="text-xs text-gray-600 mt-2">{`Request: nftRegistry.get_tokens_by_owner(identity.getPrincipal())`}</pre>
         </div>
       )}
 
