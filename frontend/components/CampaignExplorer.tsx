@@ -17,8 +17,8 @@ interface Campaign {
 }
 
 export const CampaignExplorer = () => {
-  // Demo mode - always authenticated
-  const isAuthenticated = true;
+
+  const isAuthenticated = false;
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(false);
   const [contributing, setContributing] = useState<number | null>(null);
@@ -29,78 +29,26 @@ export const CampaignExplorer = () => {
   const loadCampaigns = async () => {
     setLoading(true);
     try {
-      console.log('📊 Fetching campaigns from campaign factory...');
-      
-      // Make real API call to campaign factory
       const canisterUrl = 'https://ic0.app/api/v2/canister/rrkah-fqaaa-aaaah-qcqyq-cai/call';
-      console.log('📡 GET request to canister:', canisterUrl);
-      
-      try {
-        const response = await fetch(canisterUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/cbor',
-          },
-          body: JSON.stringify({
-            method_name: 'list_campaigns',
-            arg: {}
-          })
-        });
-        
-        console.log('📊 Campaign list response status:', response.status);
-        const result = await response.text();
-        console.log('📄 Campaign list response:', result.substring(0, 200) + '...');
-      } catch (apiError) {
-        console.log('⚠️ Campaign API call failed (expected in demo):', apiError instanceof Error ? apiError.message : String(apiError));
+      const response = await fetch(canisterUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/cbor',
+        },
+        body: JSON.stringify({
+          method_name: 'list_campaigns',
+          arg: {}
+        })
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch campaigns');
       }
 
-      // Mock campaigns with real-looking data
-      const mockCampaigns: Campaign[] = [
-        {
-          id: 1,
-          title: "Revolutionary Music Album",
-          description: "Fund my upcoming electronic music album with royalty sharing for supporters",
-          goal: 50000 * 1e8, // 50k ICP in e8s
-          current_funding: 15000 * 1e8, // 15k ICP funded
-          revenue_share: 25,
-          creator: "rdmx6-jaaaa-aaaah-qcaiq-cai",
-          is_active: true,
-          youtube_channel: "MusicProducer123",
-          estimated_monthly_revenue: 2400,
-          supporters_count: 127
-        },
-        {
-          id: 2,
-          title: "Tech Tutorial Series",
-          description: "Educational blockchain content with token rewards for early supporters",
-          goal: 30000 * 1e8,
-          current_funding: 8500 * 1e8,
-          revenue_share: 20,
-          creator: "be2us-64aaa-aaaah-qcqaq-cai",
-          is_active: true,
-          youtube_channel: "TechEducator",
-          estimated_monthly_revenue: 1800,
-          supporters_count: 89
-        },
-        {
-          id: 3,
-          title: "Gaming Content Empire",
-          description: "Building the next big gaming channel with subscriber profit sharing",
-          goal: 75000 * 1e8,
-          current_funding: 75000 * 1e8, // Fully funded
-          revenue_share: 30,
-          creator: "rdmx6-jaaaa-aaaah-qcaiq-cai",
-          is_active: false,
-          youtube_channel: "GameMaster Pro",
-          estimated_monthly_revenue: 4200,
-          supporters_count: 234
-        }
-      ];
-
-      console.log('🎯 Loaded campaigns:', mockCampaigns.length);
-      setCampaigns(mockCampaigns);
+      const result = await response.json();
+     
+      setCampaigns(Array.isArray(result) ? result : []);
     } catch (error) {
-      console.error('❌ Failed to load campaigns:', error);
+      console.error('Failed to load campaigns:', error);
       setMessage('Failed to load campaigns');
     } finally {
       setLoading(false);
@@ -125,15 +73,8 @@ export const CampaignExplorer = () => {
     setMessage('');
 
     try {
-      console.log('💰 Starting contribution process...');
-      console.log('📊 Contribution details:', {
-        campaignId,
-        amount,
-        currency,
-        contributor: 'rdmx6-jaaaa-aaaah-qcaiq-cai' // Demo principal
-      });
-
-      // Make real API call to vault canister
+     
+     
       const vaultUrl = 'https://ic0.app/api/v2/canister/rdmx6-jaaaa-aaaah-qcqyq-cai/call';
       const contributionAmount = parseFloat(amount) * 1e8; // Convert to e8s
       
@@ -146,9 +87,7 @@ export const CampaignExplorer = () => {
         }
       };
 
-      console.log('📡 POST request to vault:', vaultUrl);
-      console.log('📦 Contribution payload:', contributionPayload);
-
+  
       try {
         const response = await fetch(vaultUrl, {
           method: 'POST',
@@ -158,19 +97,12 @@ export const CampaignExplorer = () => {
           body: JSON.stringify(contributionPayload)
         });
 
-        console.log('📊 Contribution response status:', response.status);
         const result = await response.text();
         console.log('📄 Contribution response:', result.substring(0, 200) + '...');
-      } catch (apiError) {
-        console.log('⚠️ Vault API call failed (expected in demo):', apiError instanceof Error ? apiError.message : String(apiError));
-      }
+      } 
 
-      // Simulate NFT minting
-      console.log('🎨 Minting NFT receipt...');
-      const nftId = `nft_${campaignId}_${Math.random().toString(36).substring(2, 15)}`;
-      console.log('🆔 Generated NFT ID:', nftId);
+     
 
-      // Update campaign funding (simulate)
       setCampaigns(prevCampaigns => 
         prevCampaigns.map(campaign => 
           campaign.id === campaignId 
@@ -187,7 +119,7 @@ export const CampaignExplorer = () => {
       setContributionAmounts(prev => ({ ...prev, [campaignId]: '' }));
       
     } catch (error) {
-      console.error('❌ Contribution failed:', error);
+
       setMessage(`Contribution failed: ${error}`);
     } finally {
       setContributing(null);
@@ -323,7 +255,7 @@ export const CampaignExplorer = () => {
                       </div>
                       
                       <p className="text-xs text-gray-500">
-                        💎 You'll receive an NFT representing your {campaign.revenue_share}% share
+                        You'll receive an NFT representing your {campaign.revenue_share}% share
                       </p>
                     </div>
                   </div>

@@ -22,62 +22,34 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
   
   const fetchYouTubeAnalytics = async () => {
     try {
-      console.log(' Fetching YouTube Analytics data...');
+      console.log('Fetching YouTube Analytics data...');
+      const accessToken = localStorage.getItem('youtube_access_token');
+      if (!accessToken) {
+        throw new Error('No YouTube access token found.');
+      }
       
-      
-      const analyticsEndpoint = 'https://youtubeanalytics.googleapis.com/v2/reports';
-      const accessToken = JSON.parse(localStorage.getItem('youtube_oauth_demo') || '{}').accessToken;
-      
-      console.log(' Analytics API endpoint:', analyticsEndpoint);
-      console.log(' Using access token:', accessToken?.substring(0, 20) + '...');
-      
-      // Mock analytics data based on real YouTube metrics
-      const mockAnalytics = {
-        views: 2150000,
-        watchTime: 8600000, // minutes
-        subscribers: 2,
-        avgViewDuration: 4.2, // minutes
-        cpm: 2.5, // cost per mille
-        rpm: 1.8, // revenue per mille
-        estimatedRevenue: 3, 
-        topVideos: [
-          { title: 'Tech Review #1', views: 450000, revenue: 810 },
-          { title: 'Tutorial Series', views: 380000, revenue: 684 },
-          { title: 'Unboxing Video', views: 320000, revenue: 576 }
-        ]
-      };
-      
-      console.log(' Channel Analytics:');
-      console.log('   Total Views:', mockAnalytics.views.toLocaleString());
-      console.log('   Watch Time:', (mockAnalytics.watchTime / 60).toFixed(0), 'hours');
-      console.log('   Subscribers:', mockAnalytics.subscribers.toLocaleString());
-      console.log('   Avg View Duration:', mockAnalytics.avgViewDuration, 'minutes');
-      console.log('   CPM:', '$' + mockAnalytics.cpm);
-      console.log('   RPM:', '$' + mockAnalytics.rpm);
-      console.log('   Monthly Revenue:', '$' + mockAnalytics.estimatedRevenue);
-      
-      // Calculate tokenizable revenue potential
-      const monthlyRevenue = mockAnalytics.estimatedRevenue;
+      const analyticsEndpoint = 'https://youtube.googleapis.com/youtube/v3/channels?part=statistics&mine=true';
+      const response = await fetch(analyticsEndpoint, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch YouTube analytics');
+      }
+      const data = await response.json();
+      const stats = data.items?.[0]?.statistics || {};
+      const monthlyRevenue = Number(stats.estimatedRevenue) || 0;
       const annualRevenue = monthlyRevenue * 12;
-      const growthMultiplier = 1.25; // 25% growth potential
-      const tokenizablePercentage = 0.6; // 60% of future revenue can be tokenized
-      
+      const growthMultiplier = 1.25;
+      const tokenizablePercentage = 0.6;
       const calculatedRevenue = Math.round(annualRevenue * growthMultiplier * tokenizablePercentage);
-      
-      console.log(' Revenue Calculation:');
-      console.log('   Monthly Revenue:', '$' + monthlyRevenue);
-      console.log('   Annual Revenue:', '$' + annualRevenue);
-      console.log('   Growth Multiplier:', growthMultiplier + 'x');
-      console.log('   Tokenizable %:', (tokenizablePercentage * 100) + '%');
-      console.log('    Estimated Tokenizable Revenue:', '$' + calculatedRevenue);
-      
-      setAnalyticsData(mockAnalytics);
+      setAnalyticsData(stats);
       setEstimatedRevenue(calculatedRevenue);
-      
       return calculatedRevenue;
-      
     } catch (error) {
-      console.error(' Failed to fetch analytics:', error);
+      console.error('Failed to fetch analytics:', error);
       return null;
     }
   };
@@ -102,7 +74,7 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
     setMessage('');
 
     try {
-      // Use the estimated revenue from YouTube analytics
+    
       const sharePercentage = parseInt(revenueShare);
 
       console.log(' Creating campaign with real API call...');
@@ -114,14 +86,14 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
         youtubeAnalytics: analyticsData
       });
 
-      // Make actual API call to campaign factory canister
+    
       const canisterUrl = 'https://ic0.app/api/v2/canister/rrkah-fqaaa-aaaah-qcqyq-cai/call';
       const campaignPayload = {
         method_name: 'create_campaign',
         arg: {
           title: title,
           description: description,
-          funding_goal: estimatedRevenue * 100000000, // Convert to e8s
+          funding_goal: estimatedRevenue * 100000000, 
           revenue_share_percentage: sharePercentage,
           oracle_endpoints: ['https://api.coinbase.com/v2/exchange-rates']
         }
@@ -146,13 +118,12 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
         console.log(' Campaign API call failed (expected in demo):', apiError instanceof Error ? apiError.message : String(apiError));
       }
 
-      // Generate campaign ID
+     
       const generatedCampaignId = 'campaign_' + Math.random().toString(36).substring(2, 15);
       console.log(' Generated Campaign ID:', generatedCampaignId);
 
       setMessage(`Campaign created successfully!  Campaign ID: ${generatedCampaignId}`);
       
-      // Reset form
       setTitle('');
       setDescription('');
       setRevenueShare('20');
@@ -168,7 +139,6 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
     }
   };
 
-  // Trigger analytics fetch when YouTube is connected
   const handleYouTubeConnectionChange = async (connected: boolean) => {
     setYoutubeConnected(connected);
     if (connected) {
@@ -180,13 +150,13 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
     }
   };
 
-  // Remove the authentication check since we're always authenticated in demo mode
+
   return (
     <div className="max-w-2xl mx-auto p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
       <h2 className="text-2xl font-bold mb-6 text-gray-900">Create Campaign</h2>
       
       <div className="space-y-4">
-        {/* YouTube Connection Section */}
+     
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Content Source *
