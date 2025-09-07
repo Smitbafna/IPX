@@ -4,7 +4,6 @@ import { CreateCampaign } from '../../components/CreateCampaign';
 
 export default function CreateCampaignPage() {
   const handleCampaignCreated = () => {
-    // Optionally redirect to explore page or show success message
     console.log('Campaign created successfully!');
   };
 

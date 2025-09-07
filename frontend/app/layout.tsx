@@ -37,7 +37,6 @@ export default function RootLayout({
         className={`${interSans.variable} ${jetBrainsMono.variable} antialiased`}
       >
         <Providers>
-          <Navbar />
           {children}
         </Providers>
       </body>
