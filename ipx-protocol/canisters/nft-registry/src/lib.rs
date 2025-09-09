@@ -341,15 +341,205 @@ fn set_youtube_verifier_key(key: Vec<u8>, proof_type: ProofType) -> Result<bool,
     }
 }
 
+#[update]
+fn set_youtube_verifier_key_legacy(key: Vec<u8>) -> Result<bool, String> {
+    // For backward compatibility
+    set_youtube_verifier_key(key, ProofType::ChannelOwnership)
+}
 
+
+
+// Enhanced Groth16 ZK verification implementation with proof type
+fn verify_zk_proof(
+    proof_bytes: &[u8], 
+    public_inputs: &[String], 
+    verifier_key_bytes: &[u8],
+    proof_type: Option<ProofType>
+) -> Result<bool, String> {
+    // Log verification attempt
+    ic_cdk::println!("Verifying ZK proof for type: {:?}", proof_type);
+    
+    // Step 1: Deserialize the verification key
+    let verifying_key = VerifyingKey::<Bn254>::deserialize(verifier_key_bytes)
+        .map_err(|e| format!("Failed to deserialize verification key: {:?}", e))?;
+    
+    // Step 2: Prepare the verification key
+    let prepared_verifying_key = prepare_verifying_key(&verifying_key);
+    
+    // Step 3: Deserialize the proof
+    let proof = Proof::<Bn254>::deserialize(proof_bytes)
+        .map_err(|e| format!("Failed to deserialize proof: {:?}", e))?;
+    
+    // Step 4: Parse the public inputs (convert from hex strings to field elements)
+    let mut public_inputs_fr = Vec::with_capacity(public_inputs.len());
+    for input in public_inputs {
+        // Remove "0x" prefix if present
+        let input_str = if input.starts_with("0x") { &input[2..] } else { input };
+        
+        // Convert hex string to bytes
+        let bytes = hex::decode(input_str)
+            .map_err(|e| format!("Failed to decode public input as hex: {:?}", e))?;
+        
+        // Convert bytes to field element
+        let fr = Fr::read(&bytes[..])
+            .map_err(|e| format!("Failed to convert bytes to field element: {:?}", e))?;
+            
+        public_inputs_fr.push(fr);
+    }
+    
+    // Step 5: Verify the proof
+    let verification_result = verify_proof(&prepared_verifying_key, &proof, &public_inputs_fr);
+    
+    // Additional validation for specific proof types
+    if let Some(proof_type) = proof_type {
+        // For subscriber count and view count proofs, we need to validate the public inputs format
+        match proof_type {
+            ProofType::SubscriberCount => {
+                if public_inputs.len() < 2 {
+                    return Err("SubscriberCount proof requires at least 2 public inputs".to_string());
+                }
+            },
+            ProofType::ViewCount => {
+                if public_inputs.len() < 2 {
+                    return Err("ViewCount proof requires at least 2 public inputs".to_string());
+                }
+            },
+            ProofType::VideoEngagement => {
+                if public_inputs.len() < 3 {
+                    return Err("VideoEngagement proof requires at least 3 public inputs".to_string());
+                }
+            },
+            _ => {}
+        }
+    }
+    
+    // Return the result with detailed logging
+    match verification_result {
+        Ok(true) => {
+            ic_cdk::println!("ZK proof verification succeeded for type: {:?}", proof_type);
+            Ok(true)
+        },
+        Ok(false) => {
+            ic_cdk::println!("ZK proof verification failed for type: {:?}", proof_type);
+            Ok(false)
+        },
+        Err(e) => {
+            ic_cdk::println!("ZK proof verification error for type: {:?}: {:?}", proof_type, e);
+            Err(format!("Proof verification error: {:?}", e))
+        },
+    }
+}
 
 #[update]
-fn verify_video_engagement(
+fn store_youtube_zk_proof(
+    proof_bytes: Vec<u8>,
+    public_inputs: Vec<String>,
+    channel_id: String,
+    channel_name: Option<String>,
+    proof_type: ProofType,
+    subscriber_count: Option<u64>,
+    view_count: Option<u64>,
+    video_count: Option<u64>,
+    creation_date: Option<String>
+) -> Result<bool, String> {
+    // Get the caller's principal
+    let caller = msg_caller();
+    
+   
+    let key = VERIFIER_KEYS.with(|v| {
+        v.borrow().get(&proof_type).cloned()
+    });
+    
+    let key = match key {
+        Some(k) => k,
+        None => {
+            if proof_type == ProofType::ChannelOwnership {
+                VERIFIER_KEY.with(|v| v.borrow().clone()).ok_or_else(|| "Verifier key not set".to_string())?
+            } else {
+                return Err(format!("Verifier key not set for proof type: {:?}", proof_type));
+            }
+        },
+    };
+    
+    // Verify the ZK proof
+    let is_valid = verify_zk_proof(&proof_bytes, &public_inputs, &key, Some(proof_type.clone()))
+        .map_err(|e| format!("Failed to verify ZK proof: {}", e))?;
+    
+    if !is_valid {
+        return Err("Invalid ZK proof".to_string());
+    }
+    
+    let now = time();
+    let youtube_identity = YouTubeIdentity {
+        channel_id: channel_id.clone(),
+        channel_name,
+        verification_timestamp: now,
+        valid_until: Some(now + 30 * 24 * 60 * 60 * 1_000_000_000), // 30 days in nanoseconds
+        subscriber_count,
+        view_count,
+        video_count,
+        creation_date,
+    };
+    
+    // Store metrics if available
+    if let (Some(subs), Some(views), Some(videos)) = (subscriber_count, view_count, video_count) {
+        let metrics = YouTubeMetrics {
+            subscriber_count: subs,
+            view_count: views,
+            video_count: videos,
+            verified_at: now,
+        };
+        
+        YOUTUBE_METRICS.with(|m| {
+            m.borrow_mut().insert(channel_id.clone(), metrics);
+        });
+    }
+    
+    let proof_data = ZkProofData {
+        public_inputs,
+        proof_bytes,
+        identity: youtube_identity,
+        proof_type,
+    };
+    
+    // Store the mapping from principal to proof
+    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        p.borrow_mut().insert(caller, proof_data);
+    });
+    
+    // Store the mapping from channel_id to principal
+    CHANNEL_TO_PRINCIPAL.with(|c| {
+        c.borrow_mut().insert(channel_id, caller);
+    });
+    
+    Ok(true)
+}
+
+// Compatibility method for older clients
+#[update]
+fn store_youtube_zk_proof_legacy(
+    proof_bytes: Vec<u8>,
+    public_inputs: Vec<String>,
+    channel_id: String,
+    channel_name: Option<String>
+) -> Result<bool, String> {
+    store_youtube_zk_proof(
+        proof_bytes,
+        public_inputs,
+        channel_id,
+        channel_name,
+        ProofType::ChannelOwnership,
+        None,
+        None,
+        None,
+        None
+    )
+}
+
+#[update]
+fn verify_subscriber_count_proof(
     principal: Principal,
-    video_id: String,
-    min_likes: Option<u64>,
-    min_comments: Option<u64>,
-    min_views: Option<u64>
+    min_subscribers: u64
 ) -> Result<bool, String> {
     // Get the proof data for the principal
     let proof_data = PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
@@ -358,91 +548,59 @@ fn verify_video_engagement(
     
     match proof_data {
         Some(data) => {
-            // Check if the proof type supports video engagement
-            if data.proof_type != ProofType::VideoEngagement && data.proof_type != ProofType::Combined {
-                return Err("No video engagement proof available for this principal".to_string());
+            // Check if the proof type is relevant for subscriber verification
+            if data.proof_type != ProofType::SubscriberCount && data.proof_type != ProofType::Combined {
+                return Err("No subscriber count proof available for this principal".to_string());
             }
             
-            // For video engagement, we expect the first public input to be the video ID hash
-            if data.public_inputs.len() < 4 {
-                return Err("Invalid video engagement proof format".to_string());
-            }
-            
-            // Generate hash of the provided video ID to compare with the proof
-            let mut hasher = Sha256::new();
-            hasher.update(video_id.as_bytes());
-            let hash_result = hasher.finalize();
-            let video_hash_hex = hex::encode(hash_result);
-            
-            // The first public input should be the video hash
-            let proof_video_hash = if data.public_inputs[0].starts_with("0x") {
-                data.public_inputs[0][2..].to_string()
+            // Check if the identity has subscriber count data
+            if let Some(count) = data.identity.subscriber_count {
+                // Verify that the subscriber count meets the minimum requirement
+                Ok(count >= min_subscribers)
             } else {
-                data.public_inputs[0].clone()
-            };
-            
-            // Check if the video hash matches
-            if video_hash_hex != proof_video_hash {
-                return Err("Video ID doesn't match the proof".to_string());
+                Err("No subscriber count data available".to_string())
+            }
+        },
+        None => Err("No YouTube proof registered for this principal".to_string()),
+    }
+}
+
+#[update]
+fn verify_view_count_proof(
+    principal: Principal,
+    min_views: u64
+) -> Result<bool, String> {
+    // Get the proof data for the principal
+    let proof_data = PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        p.borrow().get(&principal).cloned()
+    });
+    
+    match proof_data {
+        Some(data) => {
+          
+            if data.proof_type != ProofType::ViewCount && data.proof_type != ProofType::Combined {
+                return Err("No view count proof available for this principal".to_string());
             }
             
-            // Extract engagement metrics from the public inputs
-            let views = u64::from_str_radix(&data.public_inputs[1], 16).unwrap_or(0);
-            let likes = u64::from_str_radix(&data.public_inputs[2], 16).unwrap_or(0);
-            let comments = u64::from_str_radix(&data.public_inputs[3], 16).unwrap_or(0);
-            
-            // Check if the engagement meets the minimum requirements
-            let mut meets_requirements = true;
-            
-            if let Some(min) = min_views {
-                meets_requirements = meets_requirements && views >= min;
+            // Check if the identity has view count data
+            if let Some(count) = data.identity.view_count {
+                // Verify that the view count meets the minimum requirement
+                Ok(count >= min_views)
+            } else {
+                Err("No view count data available".to_string())
             }
-            
-            if let Some(min) = min_likes {
-                meets_requirements = meets_requirements && likes >= min;
-            }
-            
-            if let Some(min) = min_comments {
-                meets_requirements = meets_requirements && comments >= min;
-            }
-            
-            Ok(meets_requirements)
         },
         None => Err("No YouTube proof registered for this principal".to_string()),
     }
 }
 
 #[query]
-fn verify_youtube_ownership(principal: Principal, channel_id: String) -> bool {
-    // Check if the principal has a verified YouTube identity
-    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
-        if let Some(proof_data) = p.borrow().get(&principal) {
-            // Check if the identity matches the requested channel ID
-            if proof_data.identity.channel_id == channel_id {
-                // Check if the verification is still valid
-                if let Some(valid_until) = proof_data.identity.valid_until {
-                    return valid_until > time();
-                }
-                return true;
-            }
-        }
-        false
+fn get_youtube_metrics(channel_id: String) -> Option<YouTubeMetrics> {
+    YOUTUBE_METRICS.with(|m| {
+        m.borrow().get(&channel_id).cloned()
     })
 }
 
-#[query]
-fn get_youtube_identity(principal: Principal) -> Option<YouTubeIdentity> {
-    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
-        p.borrow().get(&principal).map(|proof_data| proof_data.identity.clone())
-    })
-}
-
-#[query]
-fn get_principal_by_youtube_channel(channel_id: String) -> Option<Principal> {
-    CHANNEL_TO_PRINCIPAL.with(|c| {
-        c.borrow().get(&channel_id).copied()
-    })
-}
 
 
 ic_cdk::export_candid!();
