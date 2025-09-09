@@ -12,3 +12,9 @@ ic-cdk-macros = { workspace = true }
 ic-stable-structures = { workspace = true }
 candid = { workspace = true }
 serde = { workspace = true }
+ark-bn254 = "0.3.0"
+ark-ff = "0.3.0"
+ark-groth16 = "0.3.0"
+ark-serialize = "0.3.0"
+sha2 = "0.10.6"
+hex = "0.4.3"

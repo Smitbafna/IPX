@@ -4,6 +4,14 @@ use ic_cdk_macros::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::cell::RefCell;
+use ark_bn254::{Bn254, Fr, G1Affine, G2Affine};
+use ark_ff::{FromBytes, PrimeField};
+use ark_groth16::{prepare_verifying_key, verify_proof, Proof, VerifyingKey};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use sha2::{Sha256, Digest};
+use hex;
+
+
 
 type TokenId = u64;
 
@@ -33,6 +41,43 @@ pub struct ApprovalArgs {
 }
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct YouTubeIdentity {
+    pub channel_id: String,
+    pub channel_name: Option<String>,
+    pub verification_timestamp: u64,
+    pub valid_until: Option<u64>,
+    pub subscriber_count: Option<u64>,
+    pub view_count: Option<u64>,
+    pub video_count: Option<u64>,
+    pub creation_date: Option<String>,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct YouTubeMetrics {
+    pub subscriber_count: u64,
+    pub view_count: u64,
+    pub video_count: u64,
+    pub verified_at: u64,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct ZkProofData {
+    pub public_inputs: Vec<String>,
+    pub proof_bytes: Vec<u8>,
+    pub identity: YouTubeIdentity,
+    pub proof_type: ProofType,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash, Copy)]
+pub enum ProofType {
+    ChannelOwnership,
+    SubscriberCount,
+    ViewCount,
+    VideoEngagement,
+    Combined,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct CollectionMetadata {
     pub name: String,
     pub description: String,
@@ -53,6 +98,24 @@ thread_local! {
             total_supply: 0,
         }
     );
+    
+    // YouTube Identity verification storage
+    static PRINCIPAL_TO_YOUTUBE_PROOF: RefCell<HashMap<Principal, ZkProofData>> = RefCell::new(HashMap::new());
+    static CHANNEL_TO_PRINCIPAL: RefCell<HashMap<String, Principal>> = RefCell::new(HashMap::new());
+    
+    // Multiple verifier keys for different types of proofs
+    static VERIFIER_KEYS: RefCell<HashMap<ProofType, Vec<u8>>> = RefCell::new(HashMap::new());
+    
+    // Legacy verifier key for backward compatibility
+    static VERIFIER_KEY: RefCell<Option<Vec<u8>>> = RefCell::new(None);
+    
+    // YouTube metrics storage
+    static YOUTUBE_METRICS: RefCell<HashMap<String, YouTubeMetrics>> = RefCell::new(HashMap::new());
+    
+    // Admin principals allowed to set the verifier keys
+    static ADMINS: RefCell<Vec<Principal>> = RefCell::new(vec![
+        Principal::from_text("sgymv-uiaaa-aaaaa-aaaia-cai").unwrap(), 
+    ]);
 }
 
 #[init]
@@ -60,7 +123,6 @@ fn init() {
     ic_cdk::println!("NFT Registry (ICRC-7 compliant) initialized");
 }
 
-// ICRC-7 Standard Methods
 
 #[query]
 fn icrc7_collection_metadata() -> CollectionMetadata {
@@ -213,7 +275,7 @@ fn mint(
     share_percentage: f64,
     metadata_json: String,
 ) -> Result<TokenId, String> {
-    let caller = msg_caller();
+    let _caller = msg_caller(); // Prefix with underscore to acknowledge it's not used
     
 
     
@@ -248,4 +310,140 @@ fn mint(
     
     Ok(token_id)
 }
+
+
+
+#[update]
+fn set_youtube_verifier_key(key: Vec<u8>, proof_type: ProofType) -> Result<bool, String> {
+    let caller = msg_caller();
+    
+    // Check if caller is an admin
+    let is_admin = ADMINS.with(|admins| {
+        admins.borrow().contains(&caller)
+    });
+    
+    if !is_admin {
+        return Err("Unauthorized: only admins can set verifier key".to_string());
+    }
+    
+    // Validate the key by attempting to deserialize it
+    match ark_groth16::VerifyingKey::<ark_bn254::Bn254>::deserialize(&key[..]) {
+        Ok(_) => {
+            // Key is valid, store it for the specified proof type
+            VERIFIER_KEYS.with(|v| {
+                v.borrow_mut().insert(proof_type, key);
+            });
+            Ok(true)
+        },
+        Err(e) => {
+            Err(format!("Invalid verifying key format: {:?}", e))
+        }
+    }
+}
+
+
+
+#[update]
+fn verify_video_engagement(
+    principal: Principal,
+    video_id: String,
+    min_likes: Option<u64>,
+    min_comments: Option<u64>,
+    min_views: Option<u64>
+) -> Result<bool, String> {
+    // Get the proof data for the principal
+    let proof_data = PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        p.borrow().get(&principal).cloned()
+    });
+    
+    match proof_data {
+        Some(data) => {
+            // Check if the proof type supports video engagement
+            if data.proof_type != ProofType::VideoEngagement && data.proof_type != ProofType::Combined {
+                return Err("No video engagement proof available for this principal".to_string());
+            }
+            
+            // For video engagement, we expect the first public input to be the video ID hash
+            if data.public_inputs.len() < 4 {
+                return Err("Invalid video engagement proof format".to_string());
+            }
+            
+            // Generate hash of the provided video ID to compare with the proof
+            let mut hasher = Sha256::new();
+            hasher.update(video_id.as_bytes());
+            let hash_result = hasher.finalize();
+            let video_hash_hex = hex::encode(hash_result);
+            
+            // The first public input should be the video hash
+            let proof_video_hash = if data.public_inputs[0].starts_with("0x") {
+                data.public_inputs[0][2..].to_string()
+            } else {
+                data.public_inputs[0].clone()
+            };
+            
+            // Check if the video hash matches
+            if video_hash_hex != proof_video_hash {
+                return Err("Video ID doesn't match the proof".to_string());
+            }
+            
+            // Extract engagement metrics from the public inputs
+            let views = u64::from_str_radix(&data.public_inputs[1], 16).unwrap_or(0);
+            let likes = u64::from_str_radix(&data.public_inputs[2], 16).unwrap_or(0);
+            let comments = u64::from_str_radix(&data.public_inputs[3], 16).unwrap_or(0);
+            
+            // Check if the engagement meets the minimum requirements
+            let mut meets_requirements = true;
+            
+            if let Some(min) = min_views {
+                meets_requirements = meets_requirements && views >= min;
+            }
+            
+            if let Some(min) = min_likes {
+                meets_requirements = meets_requirements && likes >= min;
+            }
+            
+            if let Some(min) = min_comments {
+                meets_requirements = meets_requirements && comments >= min;
+            }
+            
+            Ok(meets_requirements)
+        },
+        None => Err("No YouTube proof registered for this principal".to_string()),
+    }
+}
+
+#[query]
+fn verify_youtube_ownership(principal: Principal, channel_id: String) -> bool {
+    // Check if the principal has a verified YouTube identity
+    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        if let Some(proof_data) = p.borrow().get(&principal) {
+            // Check if the identity matches the requested channel ID
+            if proof_data.identity.channel_id == channel_id {
+                // Check if the verification is still valid
+                if let Some(valid_until) = proof_data.identity.valid_until {
+                    return valid_until > time();
+                }
+                return true;
+            }
+        }
+        false
+    })
+}
+
+#[query]
+fn get_youtube_identity(principal: Principal) -> Option<YouTubeIdentity> {
+    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        p.borrow().get(&principal).map(|proof_data| proof_data.identity.clone())
+    })
+}
+
+#[query]
+fn get_principal_by_youtube_channel(channel_id: String) -> Option<Principal> {
+    CHANNEL_TO_PRINCIPAL.with(|c| {
+        c.borrow().get(&channel_id).copied()
+    })
+}
+
+
+ic_cdk::export_candid!();
 
