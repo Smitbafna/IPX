@@ -601,6 +601,106 @@ fn get_youtube_metrics(channel_id: String) -> Option<YouTubeMetrics> {
     })
 }
 
+#[update]
+fn verify_video_engagement(
+    principal: Principal,
+    video_id: String,
+    min_likes: Option<u64>,
+    min_comments: Option<u64>,
+    min_views: Option<u64>
+) -> Result<bool, String> {
+    // Get the proof data for the principal
+    let proof_data = PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        p.borrow().get(&principal).cloned()
+    });
+    
+    match proof_data {
+        Some(data) => {
+            // Check if the proof type supports video engagement
+            if data.proof_type != ProofType::VideoEngagement && data.proof_type != ProofType::Combined {
+                return Err("No video engagement proof available for this principal".to_string());
+            }
+            
+            // For video engagement, we expect the first public input to be the video ID hash
+            if data.public_inputs.len() < 4 {
+                return Err("Invalid video engagement proof format".to_string());
+            }
+            
+            // Generate hash of the provided video ID to compare with the proof
+            let mut hasher = Sha256::new();
+            hasher.update(video_id.as_bytes());
+            let hash_result = hasher.finalize();
+            let video_hash_hex = hex::encode(hash_result);
+            
+            // The first public input should be the video hash
+            let proof_video_hash = if data.public_inputs[0].starts_with("0x") {
+                data.public_inputs[0][2..].to_string()
+            } else {
+                data.public_inputs[0].clone()
+            };
+            
+            // Check if the video hash matches
+            if video_hash_hex != proof_video_hash {
+                return Err("Video ID doesn't match the proof".to_string());
+            }
+            
+            // Extract engagement metrics from the public inputs
+            let views = u64::from_str_radix(&data.public_inputs[1], 16).unwrap_or(0);
+            let likes = u64::from_str_radix(&data.public_inputs[2], 16).unwrap_or(0);
+            let comments = u64::from_str_radix(&data.public_inputs[3], 16).unwrap_or(0);
+            
+            // Check if the engagement meets the minimum requirements
+            let mut meets_requirements = true;
+            
+            if let Some(min) = min_views {
+                meets_requirements = meets_requirements && views >= min;
+            }
+            
+            if let Some(min) = min_likes {
+                meets_requirements = meets_requirements && likes >= min;
+            }
+            
+            if let Some(min) = min_comments {
+                meets_requirements = meets_requirements && comments >= min;
+            }
+            
+            Ok(meets_requirements)
+        },
+        None => Err("No YouTube proof registered for this principal".to_string()),
+    }
+}
+
+#[query]
+fn verify_youtube_ownership(principal: Principal, channel_id: String) -> bool {
+    // Check if the principal has a verified YouTube identity
+    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        if let Some(proof_data) = p.borrow().get(&principal) {
+            // Check if the identity matches the requested channel ID
+            if proof_data.identity.channel_id == channel_id {
+                // Check if the verification is still valid
+                if let Some(valid_until) = proof_data.identity.valid_until {
+                    return valid_until > time();
+                }
+                return true;
+            }
+        }
+        false
+    })
+}
+
+#[query]
+fn get_youtube_identity(principal: Principal) -> Option<YouTubeIdentity> {
+    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| {
+        p.borrow().get(&principal).map(|proof_data| proof_data.identity.clone())
+    })
+}
+
+#[query]
+fn get_principal_by_youtube_channel(channel_id: String) -> Option<Principal> {
+    CHANNEL_TO_PRINCIPAL.with(|c| {
+        c.borrow().get(&channel_id).copied()
+    })
+}
 
 
 ic_cdk::export_candid!();
