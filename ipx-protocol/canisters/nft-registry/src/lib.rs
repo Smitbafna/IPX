@@ -702,6 +702,128 @@ fn get_principal_by_youtube_channel(channel_id: String) -> Option<Principal> {
     })
 }
 
+// Enhanced NFT minting with YouTube identity verification
+#[update]
+fn mint_nft_with_youtube_verification(
+    to: Principal,
+    campaign_id: u64, 
+    vault_canister: Principal,
+    investment_amount: u64,
+    share_percentage: f64,
+    metadata_json: String,
+    youtube_channel_id: Option<String>,
+    min_subscribers: Option<u64>,
+    min_views: Option<u64>
+) -> Result<TokenId, String> {
+    // First check for channel verification if needed
+    if let Some(channel_id) = youtube_channel_id.clone() {
+        let is_verified = verify_youtube_ownership(to, channel_id);
+        if !is_verified {
+            return Err("User does not have a verified ownership of the specified YouTube channel".to_string());
+        }
+        
+        // If minimum requirements are specified, verify them
+        if let Some(min_subs) = min_subscribers {
+            match verify_subscriber_count_proof(to, min_subs) {
+                Ok(true) => {}, // Meets minimum requirements
+                Ok(false) => return Err(format!("Channel does not meet minimum subscriber count of {}", min_subs)),
+                Err(e) => return Err(format!("Error verifying subscriber count: {}", e)),
+            }
+        }
+        
+        if let Some(min_view_count) = min_views {
+            match verify_view_count_proof(to, min_view_count) {
+                Ok(true) => {}, // Meets minimum requirements
+                Ok(false) => return Err(format!("Channel does not meet minimum view count of {}", min_view_count)),
+                Err(e) => return Err(format!("Error verifying view count: {}", e)),
+            }
+        }
+    }
+    
+    // Get YouTube metrics if available to include in metadata
+    let youtube_metrics_json = if let Some(channel_id) = youtube_channel_id {
+        YOUTUBE_METRICS.with(|m| {
+            if let Some(metrics) = m.borrow().get(&channel_id) {
+                Some(format!(
+                    r#", "youtube_metrics": {{"subscribers": {}, "views": {}, "videos": {}, "verified_at": {}}}"#,
+                    metrics.subscriber_count, metrics.view_count, metrics.video_count, metrics.verified_at
+                ))
+            } else {
+                None
+            }
+        })
+    } else {
+        None
+    };
+    
+    // Enhanced metadata with YouTube metrics if available
+    let enhanced_metadata = if let Some(metrics_json) = youtube_metrics_json {
+        // Insert the YouTube metrics into the JSON metadata
+        if metadata_json.ends_with("}") {
+            let metadata_without_closing = &metadata_json[0..metadata_json.len()-1];
+            format!("{}{}}}", metadata_without_closing, metrics_json)
+        } else {
+            format!("{}{}", metadata_json, metrics_json)
+        }
+    } else {
+        metadata_json
+    };
+    
+    let token_id = TOKEN_COUNTER.with(|counter| {
+        let id = *counter.borrow();
+        *counter.borrow_mut() += 1;
+        id
+    });
+    
+    let token_metadata = TokenMetadata {
+        token_id,
+        owner: to,
+        campaign_id,
+        vault_canister,
+        investment_amount,
+        share_percentage,
+        metadata_json: enhanced_metadata,
+        created_at: time(),
+    };
+    
+    TOKENS.with(|tokens| {
+        tokens.borrow_mut().insert(token_id, token_metadata);
+    });
+    
+    // Update total supply
+    COLLECTION_METADATA.with(|metadata| {
+        metadata.borrow_mut().total_supply += 1;
+    });
+    
+    ic_cdk::println!("NFT {} minted for {} (campaign {})", token_id, to.to_text(), campaign_id);
+    
+    Ok(token_id)
+}
+
+// Legacy method for backward compatibility
+#[update]
+fn mint_nft_with_youtube_verification_legacy(
+    to: Principal,
+    campaign_id: u64, 
+    vault_canister: Principal,
+    investment_amount: u64,
+    share_percentage: f64,
+    metadata_json: String,
+    youtube_channel_id: Option<String>
+) -> Result<TokenId, String> {
+    mint_nft_with_youtube_verification(
+        to,
+        campaign_id,
+        vault_canister,
+        investment_amount,
+        share_percentage,
+        metadata_json,
+        youtube_channel_id,
+        None,
+        None
+    )
+}
+
 
 ic_cdk::export_candid!();
 
