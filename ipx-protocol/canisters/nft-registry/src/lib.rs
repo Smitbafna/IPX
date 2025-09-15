@@ -824,6 +824,144 @@ fn mint_nft_with_youtube_verification_legacy(
     )
 }
 
+// Stable storage management
+#[pre_upgrade]
+fn pre_upgrade() {
+    // Save the existing NFT state
+    let tokens = TOKENS.with(|t| t.borrow().clone());
+    let token_approvals = TOKEN_APPROVALS.with(|t| t.borrow().clone());
+    let operator_approvals = OPERATOR_APPROVALS.with(|o| o.borrow().clone());
+    let token_counter = TOKEN_COUNTER.with(|c| *c.borrow());
+    let collection_metadata = COLLECTION_METADATA.with(|m| m.borrow().clone());
+    
+    // Save the YouTube identity verification state
+    let principal_to_youtube_proof = PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| p.borrow().clone());
+    let channel_to_principal = CHANNEL_TO_PRINCIPAL.with(|c| c.borrow().clone());
+    let verifier_keys = VERIFIER_KEYS.with(|v| v.borrow().clone());
+    let verifier_key = VERIFIER_KEY.with(|v| v.borrow().clone());
+    let youtube_metrics = YOUTUBE_METRICS.with(|m| m.borrow().clone());
+    
+   
+    let state = (
+        tokens, 
+        token_approvals, 
+        operator_approvals, 
+        token_counter, 
+        collection_metadata,
+        principal_to_youtube_proof,
+        channel_to_principal,
+        verifier_key,
+        verifier_keys,
+        youtube_metrics
+    );
+    
+    match ic_cdk::storage::stable_save((state,)) {
+        Ok(_) => (),
+        Err(e) => ic_cdk::trap(&format!("Failed to save state: {:?}", e)),
+    }
+}
 
+#[post_upgrade]
+fn post_upgrade() {
+    // Try to restore with the new state format first
+    let new_format = ic_cdk::storage::stable_restore::<((
+        HashMap<TokenId, TokenMetadata>,
+        HashMap<TokenId, Principal>,
+        HashMap<(Principal, Principal), bool>,
+        TokenId,
+        CollectionMetadata,
+        HashMap<Principal, ZkProofData>,
+        HashMap<String, Principal>,
+        Option<Vec<u8>>,
+        HashMap<ProofType, Vec<u8>>,
+        HashMap<String, YouTubeMetrics>
+    ),)>();
+    
+    match new_format {
+        Ok((state,)) => {
+            let (
+                tokens, 
+                token_approvals, 
+                operator_approvals, 
+                token_counter, 
+                collection_metadata,
+                principal_to_youtube_proof,
+                channel_to_principal,
+                verifier_key,
+                verifier_keys,
+                youtube_metrics
+            ) = state;
+            
+            // Restore all state
+            TOKENS.with(|t| *t.borrow_mut() = tokens);
+            TOKEN_APPROVALS.with(|t| *t.borrow_mut() = token_approvals);
+            OPERATOR_APPROVALS.with(|o| *o.borrow_mut() = operator_approvals);
+            TOKEN_COUNTER.with(|c| *c.borrow_mut() = token_counter);
+            COLLECTION_METADATA.with(|m| *m.borrow_mut() = collection_metadata);
+            PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| *p.borrow_mut() = principal_to_youtube_proof);
+            CHANNEL_TO_PRINCIPAL.with(|c| *c.borrow_mut() = channel_to_principal);
+            VERIFIER_KEY.with(|v| *v.borrow_mut() = verifier_key);
+            VERIFIER_KEYS.with(|v| *v.borrow_mut() = verifier_keys);
+            YOUTUBE_METRICS.with(|m| *m.borrow_mut() = youtube_metrics);
+            
+            ic_cdk::println!("Successfully restored state from new format");
+        },
+        Err(_) => {
+            // Fall back to old format
+            match ic_cdk::storage::stable_restore::<((
+                HashMap<TokenId, TokenMetadata>,
+                HashMap<TokenId, Principal>,
+                HashMap<(Principal, Principal), bool>,
+                TokenId,
+                CollectionMetadata,
+                HashMap<Principal, ZkProofData>,
+                HashMap<String, Principal>,
+                Option<Vec<u8>>
+            ),)>() {
+                Ok((state,)) => {
+                    let (
+                        tokens, 
+                        token_approvals, 
+                        operator_approvals, 
+                        token_counter, 
+                        collection_metadata,
+                        principal_to_youtube_proof,
+                        channel_to_principal,
+                        verifier_key
+                    ) = state;
+                    
+                    // Restore old state
+                    TOKENS.with(|t| *t.borrow_mut() = tokens);
+                    TOKEN_APPROVALS.with(|t| *t.borrow_mut() = token_approvals);
+                    OPERATOR_APPROVALS.with(|o| *o.borrow_mut() = operator_approvals);
+                    TOKEN_COUNTER.with(|c| *c.borrow_mut() = token_counter);
+                    COLLECTION_METADATA.with(|m| *m.borrow_mut() = collection_metadata);
+                    PRINCIPAL_TO_YOUTUBE_PROOF.with(|p| *p.borrow_mut() = principal_to_youtube_proof);
+                    CHANNEL_TO_PRINCIPAL.with(|c| *c.borrow_mut() = channel_to_principal);
+                    
+                  
+                    let verifier_key_clone = verifier_key.clone();
+                    VERIFIER_KEY.with(|v| *v.borrow_mut() = verifier_key);
+                    
+                  
+                    if let Some(key) = verifier_key_clone {
+                       
+                        VERIFIER_KEYS.with(|v| {
+                            v.borrow_mut().insert(ProofType::ChannelOwnership, key);
+                        });
+                    }
+                    
+                    ic_cdk::println!("Successfully restored state from old format");
+                },
+                Err(e) => {
+                    ic_cdk::println!("No stable storage found or error restoring: {:?}", e);
+                }
+            }
+        }
+    }
+    
+   
+    ic_cdk::println!("NFT Registry restored with YouTube ZK proof verifier");
+}
 ic_cdk::export_candid!();
 
