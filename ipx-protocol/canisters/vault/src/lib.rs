@@ -8,6 +8,7 @@ use ic_stable_structures::{
     memory_manager::{MemoryId, MemoryManager, VirtualMemory},
     DefaultMemoryImpl, StableBTreeMap,
 };
+use std::cmp;
 
 type Memory = VirtualMemory<DefaultMemoryImpl>;
 
@@ -27,6 +28,13 @@ pub struct VaultState {
     pub backers: HashMap<Principal, BackerInfo>,
     pub revenue_history: Vec<RevenueUpdate>,
     pub created_at: u64,
+    // Insurance pool related fields
+    pub insurance_pool_balance: u64,
+    pub insurance_fee_percentage: u8,
+    pub insurance_coverage_ratio: u8,  // Percentage of investment covered by insurance
+    pub insurance_claims: Vec<InsuranceClaim>,
+    pub slashing_conditions: SlashingConditions,
+    pub slashed_creators: Vec<SlashEvent>,
 }
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
@@ -54,6 +62,65 @@ pub struct InvestmentResult {
     pub message: String,
 }
 
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub enum ClaimStatus {
+    Pending,
+    Approved,
+    Rejected,
+    Paid
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct InsuranceClaim {
+    pub claim_id: u64,
+    pub claimer: Principal,
+    pub amount: u64,
+    pub reason: String,
+    pub evidence: Vec<String>,
+    pub status: ClaimStatus,
+    pub filed_at: u64,
+    pub resolved_at: Option<u64>,
+    pub approver: Option<Principal>,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct SlashingConditions {
+    pub missed_revenue_reports_threshold: u8,
+    pub revenue_decline_threshold_percentage: u8,
+    pub minimum_active_period_days: u64,
+    pub governance_votes_required: u8,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub enum SlashReason {
+    MissedRevenueReports,
+    RevenueFraud,
+    ProjectAbandonment,
+    GovernanceDecision,
+    Other(String),
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct SlashEvent {
+    pub creator: Principal,
+    pub campaign_id: u64,
+    pub reason: SlashReason,
+    pub amount_slashed: u64,
+    pub beneficiaries: Vec<Principal>,
+    pub executed_at: u64,
+    pub approved_by: Vec<Principal>,
+}
+
+#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
+pub struct CampaignMetadata {
+    pub creator: Principal,
+    pub title: String,
+    pub description: String,
+    pub funding_goal: u64,
+    pub revenue_share_percentage: u8,
+    pub oracle_endpoints: Vec<String>,
+}
+
 thread_local! {
     static MEMORY_MANAGER: MemoryManager<DefaultMemoryImpl> = MemoryManager::init(DefaultMemoryImpl::default());
     
@@ -78,13 +145,25 @@ fn init() {
         backers: HashMap::new(),
         revenue_history: Vec::new(),
         created_at: time(),
+        // Insurance pool defaults
+        insurance_pool_balance: 0,
+        insurance_fee_percentage: 2, // Default 2% insurance fee
+        insurance_coverage_ratio: 80, // Default 80% coverage of investment
+        insurance_claims: Vec::new(),
+        slashing_conditions: SlashingConditions {
+            missed_revenue_reports_threshold: 3, // 3 missed reports
+            revenue_decline_threshold_percentage: 70, // 70% decline triggers review
+            minimum_active_period_days: 30, // Must be active for 30 days
+            governance_votes_required: 51, // 51% votes required for slashing
+        },
+        slashed_creators: Vec::new(),
     };
     
     VAULT_STATE.with(|state| {
         *state.borrow_mut() = Some(vault_state);
     });
     
-    ic_cdk::println!("Vault initialized with default settings");
+    ic_cdk::println!("Vault initialized with default settings including insurance pool");
 }
 
 #[update]
@@ -106,14 +185,22 @@ async fn invest(amount: u64) -> InvestmentResult {
            
             let remaining_funding = state.funding_goal - state.current_funding;
             let actual_investment = amount.min(remaining_funding);
-            let share_percentage = (actual_investment as f64 / state.funding_goal as f64) * 100.0;
             
-         
-            state.current_funding += actual_investment;
+            // Calculate insurance fee
+            let insurance_fee = (actual_investment * state.insurance_fee_percentage as u64) / 100;
+            let investment_after_fee = actual_investment - insurance_fee;
             
-          
+            // Add to insurance pool
+            state.insurance_pool_balance += insurance_fee;
+            
+            // Calculate share percentage based on investment after fee
+            let share_percentage = (investment_after_fee as f64 / state.funding_goal as f64) * 100.0;
+            
+            // Update total funding with investment after fee
+            state.current_funding += investment_after_fee;
+            
             let backer_info = BackerInfo {
-                amount_invested: actual_investment,
+                amount_invested: actual_investment, // Track full amount including insurance fee
                 nft_token_id: None,
                 share_percentage,
                 total_claimed: 0,
@@ -126,7 +213,12 @@ async fn invest(amount: u64) -> InvestmentResult {
                 success: true,
                 nft_token_id: None, 
                 share_percentage,
-                message: format!("Investment of {} successful", actual_investment),
+                message: format!(
+                    "Investment successful: {} contributed ({} to campaign, {} to insurance pool)", 
+                    actual_investment, 
+                    investment_after_fee, 
+                    insurance_fee
+                ),
             }
         } else {
             InvestmentResult {
@@ -222,18 +314,53 @@ fn update_revenue(amount: u64, source: String, verified: bool) -> Result<(), Str
 #[update]
 async fn distribute_payouts() -> Result<Vec<(Principal, u64)>, String> {
     let mut payouts = Vec::new();
+    let mut creator_slashed = false;
+    let mut creator_slash_percentage = 0;
     
     VAULT_STATE.with(|state_ref| {
         let state_opt = state_ref.borrow();
         if let Some(ref state) = *state_opt {
-            let distributable_revenue = (state.total_revenue * state.revenue_share_percentage as u64) / 100;
+            // Check if creator has been slashed
+            if !state.slashed_creators.is_empty() {
+                creator_slashed = true;
+               
+                creator_slash_percentage = 50;
+            }
             
+            // Calculate the investor share from revenue
+            let mut investor_share = (state.total_revenue * state.revenue_share_percentage as u64) / 100;
+            
+            // If creator was slashed, add that portion to investor share
+            if creator_slashed {
+                let creator_share = (state.total_revenue * (100 - state.revenue_share_percentage) as u64) / 100;
+                let slashed_amount = (creator_share * creator_slash_percentage) / 100;
+                investor_share += slashed_amount;
+            }
+            
+            // Distribute to backers according to their share percentage
             for (backer, info) in &state.backers {
-                let backer_share = (distributable_revenue as f64 * info.share_percentage / 100.0) as u64;
+                let backer_share = (investor_share as f64 * info.share_percentage / 100.0) as u64;
                 let claimable = backer_share - info.total_claimed;
                 
                 if claimable > 0 {
                     payouts.push((*backer, claimable));
+                }
+            }
+            
+            // If we have any approved insurance claims that haven't been paid yet, add those
+            for claim in &state.insurance_claims {
+                if matches!(claim.status, ClaimStatus::Approved) {
+                    // Check if this backer is already getting a payout
+                    let existing_payout = payouts.iter_mut()
+                        .find(|(principal, _)| *principal == claim.claimer);
+                    
+                    if let Some((_, amount)) = existing_payout {
+                        // Add to existing payout
+                        *amount += claim.amount;
+                    } else {
+                        // Create new payout
+                        payouts.push((claim.claimer, claim.amount));
+                    }
                 }
             }
         }
@@ -315,45 +442,23 @@ fn get_funding_progress() -> (u64, u64, f64) {
     })
 }
 
-#[update]
-fn set_canister_refs(
-    nft_registry: Option<Principal>,
-    stream: Option<Principal>,
-    oracle: Option<Principal>,
-) -> Result<(), String> {
-    let caller = msg_caller();
-    
+
+
+#[query]
+fn get_insurance_pool_info() -> (u64, u8, u8) {
     VAULT_STATE.with(|state_ref| {
-        let mut state_opt = state_ref.borrow_mut();
-        if let Some(ref mut state) = *state_opt {
-            if state.creator != caller {
-                return Err("Only creator can set canister references".to_string());
-            }
-            
-            if let Some(nft) = nft_registry {
-                state.nft_registry_canister = Some(nft);
-            }
-            if let Some(stream) = stream {
-                state.stream_canister = Some(stream);
-            }
-            if let Some(oracle) = oracle {
-                state.oracle_canister = Some(oracle);
-            }
-            
-            Ok(())
+        if let Some(ref state) = *state_ref.borrow() {
+            (
+                state.insurance_pool_balance,
+                state.insurance_fee_percentage,
+                state.insurance_coverage_ratio
+            )
         } else {
-            Err("Vault not initialized".to_string())
+            (0, 0, 0)
         }
     })
 }
 
 
-#[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
-pub struct CampaignMetadata {
-    pub creator: Principal,
-    pub title: String,
-    pub description: String,
-    pub funding_goal: u64,
-    pub revenue_share_percentage: u8,
-    pub oracle_endpoints: Vec<String>,
-}
+
+ic_cdk::export_candid!();
