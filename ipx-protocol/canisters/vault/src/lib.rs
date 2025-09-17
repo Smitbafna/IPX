@@ -442,7 +442,7 @@ fn get_funding_progress() -> (u64, u64, f64) {
     })
 }
 
-
+// Insurance-related functions
 
 #[query]
 fn get_insurance_pool_info() -> (u64, u8, u8) {
@@ -459,6 +459,100 @@ fn get_insurance_pool_info() -> (u64, u8, u8) {
     })
 }
 
+#[update]
+fn file_insurance_claim(amount: u64, reason: String, evidence: Vec<String>) -> Result<u64, String> {
+    let caller = msg_caller();
+    
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            // Check if caller is a backer
+            if let Some(backer_info) = state.backers.get(&caller) {
+                // Calculate max claimable amount (coverage ratio * investment)
+                let max_claimable = (backer_info.amount_invested * state.insurance_coverage_ratio as u64) / 100;
+                
+                if amount > max_claimable {
+                    return Err(format!("Claim exceeds maximum coverage of {}", max_claimable));
+                }
+                
+                // Check if there's enough in the insurance pool
+                if amount > state.insurance_pool_balance {
+                    return Err("Insufficient funds in insurance pool".to_string());
+                }
+                
+                // Create claim
+                let claim_id = state.insurance_claims.len() as u64;
+                let claim = InsuranceClaim {
+                    claim_id,
+                    claimer: caller,
+                    amount,
+                    reason,
+                    evidence,
+                    status: ClaimStatus::Pending,
+                    filed_at: time(),
+                    resolved_at: None,
+                    approver: None,
+                };
+                
+                state.insurance_claims.push(claim);
+                
+                Ok(claim_id)
+            } else {
+                Err("Only backers can file insurance claims".to_string())
+            }
+        } else {
+            Err("Vault not initialized".to_string())
+        }
+    })
+}
 
+#[update]
+fn process_insurance_claim(claim_id: u64, approve: bool, notes: String) -> Result<(), String> {
+    let caller = msg_caller();
+    
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            // Check if caller is creator or has governance rights
+            if state.creator != caller {
+                return Err("Only creator or governance can process claims".to_string());
+            }
+            
+            // Find the claim
+            if let Some(claim) = state.insurance_claims.iter_mut().find(|c| c.claim_id == claim_id) {
+                if matches!(claim.status, ClaimStatus::Pending) {
+                    if approve {
+                        // Make sure we have enough in the pool
+                        if claim.amount > state.insurance_pool_balance {
+                            return Err("Insufficient funds in insurance pool".to_string());
+                        }
+                        
+                        // Update claim status
+                        claim.status = ClaimStatus::Approved;
+                        claim.resolved_at = Some(time());
+                        claim.approver = Some(caller);
+                        
+                        // Reduce the insurance pool
+                        state.insurance_pool_balance -= claim.amount;
+                                                
+                    } else {
+                        // Reject the claim
+                        claim.status = ClaimStatus::Rejected;
+                        claim.resolved_at = Some(time());
+                        claim.approver = Some(caller);
+                    }
+                    
+                    Ok(())
+                } else {
+                    Err(format!("Claim is not pending. Current status: {:?}", claim.status))
+                }
+            } else {
+                Err(format!("Claim with ID {} not found", claim_id))
+            }
+        } else {
+            Err("Vault not initialized".to_string())
+        }
+    })
+}
 
 ic_cdk::export_candid!();
