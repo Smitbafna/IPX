@@ -555,4 +555,175 @@ fn process_insurance_claim(claim_id: u64, approve: bool, notes: String) -> Resul
     })
 }
 
+// Slashing-related functions
+
+#[update]
+fn propose_slashing(creator: Principal, reason: SlashReason, evidence: Vec<String>) -> Result<u64, String> {
+    let caller = msg_caller();
+    
+
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            // Basic validation
+            if creator != state.creator {
+                return Err("Target is not the creator of this campaign".to_string());
+            }
+            
+         
+            let creator_share = state.total_revenue * (100 - state.revenue_share_percentage) as u64 / 100;
+            let slash_amount = creator_share / 2;
+            
+            // Record slash event
+            let slash_event = SlashEvent {
+                creator,
+                campaign_id: state.campaign_id,
+                reason,
+                amount_slashed: slash_amount,
+                beneficiaries: state.backers.keys().cloned().collect(), // Distribute to all backers
+                executed_at: time(),
+                approved_by: vec![caller], 
+            };
+            
+            state.slashed_creators.push(slash_event.clone());
+            
+            
+            state.insurance_pool_balance += slash_amount;
+            
+            Ok(state.slashed_creators.len() as u64 - 1)
+        } else {
+            Err("Vault not initialized".to_string())
+        }
+    })
+}
+
+#[query]
+fn get_slashing_conditions() -> SlashingConditions {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().as_ref().map_or_else(
+            || SlashingConditions {
+                missed_revenue_reports_threshold: 0,
+                revenue_decline_threshold_percentage: 0,
+                minimum_active_period_days: 0,
+                governance_votes_required: 0,
+            },
+            |s| s.slashing_conditions.clone()
+        )
+    })
+}
+
+#[query]
+fn get_slash_events() -> Vec<SlashEvent> {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().as_ref().map_or_else(
+            || Vec::new(),
+            |s| s.slashed_creators.clone()
+        )
+    })
+}
+
+#[query]
+fn get_insurance_claims(backer: Option<Principal>) -> Vec<InsuranceClaim> {
+    VAULT_STATE.with(|state_ref| {
+        if let Some(ref state) = *state_ref.borrow() {
+            match backer {
+                Some(principal) => state.insurance_claims.iter()
+                    .filter(|claim| claim.claimer == principal)
+                    .cloned()
+                    .collect(),
+                None => state.insurance_claims.clone(),
+            }
+        } else {
+            Vec::new()
+        }
+    })
+}
+
+#[query]
+fn get_insurance_claim(claim_id: u64) -> Option<InsuranceClaim> {
+    VAULT_STATE.with(|state_ref| {
+        state_ref.borrow().as_ref().and_then(|s| {
+            s.insurance_claims.iter()
+                .find(|c| c.claim_id == claim_id)
+                .cloned()
+        })
+    })
+}
+
+#[update]
+fn set_canister_refs(
+    nft_registry: Option<Principal>,
+    stream: Option<Principal>,
+    oracle: Option<Principal>,
+) -> Result<(), String> {
+    let caller = msg_caller();
+    
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            if state.creator != caller {
+                return Err("Only creator can set canister references".to_string());
+            }
+            
+            if let Some(nft) = nft_registry {
+                state.nft_registry_canister = Some(nft);
+            }
+            if let Some(stream) = stream {
+                state.stream_canister = Some(stream);
+            }
+            if let Some(oracle) = oracle {
+                state.oracle_canister = Some(oracle);
+            }
+            
+            Ok(())
+        } else {
+            Err("Vault not initialized".to_string())
+        }
+    })
+}
+
+#[update]
+fn update_insurance_settings(
+    fee_percentage: Option<u8>,
+    coverage_ratio: Option<u8>,
+    slashing_conditions: Option<SlashingConditions>
+) -> Result<(), String> {
+    let caller = msg_caller();
+    
+    VAULT_STATE.with(|state_ref| {
+        let mut state_opt = state_ref.borrow_mut();
+        if let Some(ref mut state) = *state_opt {
+            // Only creator or DAO governance can update these settings
+            if state.creator != caller {
+                return Err("Only creator or governance can update insurance settings".to_string());
+            }
+            
+            // Update insurance fee percentage if provided
+            if let Some(fee) = fee_percentage {
+                if fee > 20 {
+                    return Err("Insurance fee cannot exceed 20%".to_string());
+                }
+                state.insurance_fee_percentage = fee;
+            }
+            
+            // Update coverage ratio if provided
+            if let Some(ratio) = coverage_ratio {
+                if ratio > 100 {
+                    return Err("Coverage ratio cannot exceed 100%".to_string());
+                }
+                state.insurance_coverage_ratio = ratio;
+            }
+            
+            // Update slashing conditions if provided
+            if let Some(conditions) = slashing_conditions {
+                state.slashing_conditions = conditions;
+            }
+            
+            Ok(())
+        } else {
+            Err("Vault not initialized".to_string())
+        }
+    })
+}
+
 ic_cdk::export_candid!();
