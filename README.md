@@ -16,8 +16,28 @@ Creators must now submit a cryptographic proof of their YouTube channel and metr
 - All eligibility checks (like minimum subscribers/views) are enforced using the on-chain proof.
 - This flow blocks fake or unverified channels and ensures every campaign is backed by a verified YouTube presence.
 
-
 ---
+
+## New Feature: Slashing & Insurance Pool for Backer Protection
+
+To further protect investors and align incentives, IPX Protocol introduces an on-chain insurance pool and slashing mechanism. This system ensures that backers are compensated in case of creator misbehavior or campaign failure, and that creators are held accountable for their actions.
+
+### Technical Implementation
+- **Insurance Pool:**
+  - A small percentage of every investment (e.g., 2%) is automatically set aside into an insurance pool within the Vault canister.
+  - Backers can file insurance claims if the campaign fails or the creator is slashed. Claims are reviewed and, if approved, paid out from the pool (up to a coverage ratio based on their investment).
+  - Insurance pool parameters (fee %, coverage ratio) are configurable by the creator or DAO governance.
+- **Slashing:**
+  - Anyone can propose a slashing event against a creator for reasons such as fraud, missed revenue reports, or project abandonment.
+  - If slashing is approved (e.g., by governance vote), a portion of the creator’s revenue share is slashed and added to the insurance pool.
+  - All slashing events are recorded on-chain, including reason, evidence, and approvers.
+- **Integration:**
+  - The Vault canister manages the insurance pool, claims, and slashing events.
+  - Slashed funds are redistributed to backers via the insurance pool, providing a safety net and increasing trust in the protocol.
+- **Result:**
+  - Backers are protected from losses due to creator misbehavior.
+  - Creators are incentivized to act honestly, as slashing directly impacts their earnings.
+
 
 ## Canister Interaction Architecture
 
