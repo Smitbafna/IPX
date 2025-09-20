@@ -1,6 +1,7 @@
 import { Principal } from '@dfinity/principal';
+import { YouTubeIdentity, YouTubeMetrics } from './youtube';
 
-// Vault Canister Types
+
 export interface VaultData {
   balance: bigint;
   owner: Principal;
@@ -14,7 +15,7 @@ export interface VaultCanister {
   get_vault_data: () => Promise<VaultData | null>;
 }
 
-// BeamFi Stream Types
+
 export interface StreamData {
   id: bigint;
   sender: Principal;
@@ -66,7 +67,7 @@ export interface CampaignFactoryCanister {
   get_user_campaigns: (user: Principal) => Promise<Campaign[]>;
 }
 
-// NFT Registry Types
+
 export interface TokenMetadata {
   name: string;
   description: string;
@@ -78,11 +79,50 @@ export interface NFTRegistryCanister {
   mint: (to: Principal, metadata: TokenMetadata) => Promise<{ Ok: bigint } | { Err: string }>;
   transfer: (token_id: bigint, to: Principal) => Promise<{ Ok: string } | { Err: string }>;
   owner_of: (token_id: bigint) => Promise<Principal | null>;
+  
+  // YouTube ZK Proof verification methods
+  store_youtube_zk_proof: (
+    proof_bytes: Uint8Array,
+    public_inputs: string[],
+    channel_id: string,
+    channel_name: string | null,
+    proof_type: number,  // Corresponds to ProofType enum
+    subscriber_count: bigint | null,
+    view_count: bigint | null,
+    video_count: bigint | null,
+    creation_date: string | null
+  ) => Promise<{ Ok: boolean } | { Err: string }>;
+
+  verify_youtube_ownership: (
+    principal: Principal, 
+    channel_id: string
+  ) => Promise<boolean>;
+  
+  verify_subscriber_count_proof: (
+    principal: Principal,
+    min_subscribers: bigint
+  ) => Promise<{ Ok: boolean } | { Err: string }>;
+
+  verify_view_count_proof: (
+    principal: Principal,
+    min_views: bigint
+  ) => Promise<{ Ok: boolean } | { Err: string }>;
+
+  verify_video_engagement: (
+    principal: Principal,
+    video_id: string,
+    min_likes: bigint | null,
+    min_comments: bigint | null,
+    min_views: bigint | null
+  ) => Promise<{ Ok: boolean } | { Err: string }>;
+
+  get_youtube_identity: (principal: Principal) => Promise<YouTubeIdentity | null>;
+  
+  get_youtube_metrics: (channel_id: string) => Promise<YouTubeMetrics | null>;
   get_token_metadata: (token_id: bigint) => Promise<TokenMetadata | null>;
   get_user_tokens: (user: Principal) => Promise<bigint[]>;
 }
 
-// SNS DAO Types
 export interface ProposalType {
   EarlyUnlock?: { stream_id: bigint; beneficiary: Principal };
   CampaignRefund?: { campaign_id: bigint; reason: string };
@@ -144,7 +184,7 @@ export interface SNSDAOCanister {
   ) => Promise<{ Ok: string } | { Err: string }>;
 }
 
-// Oracle Aggregator Types
+
 export interface ApiEndpoint {
   platform: string;
   url: string;

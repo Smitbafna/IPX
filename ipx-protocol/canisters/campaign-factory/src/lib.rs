@@ -1,5 +1,5 @@
 use ic_cdk::api::{msg_caller, time};
-use ic_cdk::api::management_canister::main::{create_canister, CreateCanisterArgument, CanisterSettings, CanisterId};
+use ic_cdk::api::management_canister::main::{CreateCanisterArgument, CanisterSettings, CanisterId};
 use ic_cdk::api::call::call;
 use candid::{CandidType, Principal};
 use ic_cdk_macros::*;
@@ -111,10 +111,13 @@ async fn create_vault_canister(
     
     // Set up canister settings (optional, can be customized)
     let settings = CanisterSettings {
-        controllers: Some(vec![ic_cdk::api::caller()]),
+        controllers: Some(vec![ic_cdk::api::id()]),
         compute_allocation: None,
         memory_allocation: None,
         freezing_threshold: None,
+        reserved_cycles_limit: None,
+        wasm_memory_limit: None,
+        log_visibility: None,
     };
 
     let arg = CreateCanisterArgument {
@@ -122,8 +125,8 @@ async fn create_vault_canister(
     };
 
     // Create the canister
-    match create_canister(arg, None).await {
-        Ok((canister_id_record, _)) => {
+    match ic_cdk::api::management_canister::main::create_canister(arg, 0).await {
+        Ok((canister_id_record,)) => {
             Ok(canister_id_record.canister_id)
         }
         Err(e) => {
@@ -190,3 +193,4 @@ fn update_campaign_status(campaign_id: u64, status: CampaignStatus) -> Result<()
         }
     })
 }
+ic_cdk::export_candid!();

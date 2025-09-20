@@ -11,6 +11,17 @@ module.exports = {
         background: 'var(--background)',
         foreground: 'var(--foreground)',
       },
+      animation: {
+        'spin-slow': 'spin 15s linear infinite',
+        'spin-slow-reverse': 'spin-reverse 15s linear infinite',
+      },
+      keyframes: {
+        'spin-reverse': {
+          to: {
+            transform: 'rotate(-360deg)',
+          },
+        },
+      },
     },
   },
   plugins: [],

@@ -142,7 +142,7 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
   const handleYouTubeConnectionChange = async (connected: boolean) => {
     setYoutubeConnected(connected);
     if (connected) {
-      console.log('🔗 YouTube connected, fetching analytics...');
+      console.log('YouTube connected, fetching analytics...');
       await fetchYouTubeAnalytics();
     } else {
       setEstimatedRevenue(null);
@@ -227,7 +227,7 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onCampaignCreate
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Revenue Share (%) *
+            Revenue Share (%) 
           </label>
           <select
             value={revenueShare}

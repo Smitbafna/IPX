@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
 import { Actor, HttpAgent } from '@dfinity/agent';
-import { idlFactory as nftRegistryIDL } from '../src/declarations/nft_registry';
+import { idlFactory as nftRegistryIDL } from '../src/declarations/nft-registry';
 
 interface NFT {
   id: number;

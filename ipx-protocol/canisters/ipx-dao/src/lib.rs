@@ -48,11 +48,12 @@ thread_local! {
     static MEMBER_VOTES: RefCell<HashMap<Principal, u64>> = RefCell::new(HashMap::new()); // Voting power
     static TREASURY_BALANCE: RefCell<u64> = RefCell::new(1000000); // Initial treasury
     static READY_FOR_UPGRADE: RefCell<bool> = RefCell::new(false); // Flag for code upgrade
+    static DEFAULT_VOTING_PERIOD: RefCell<u64> = RefCell::new(7 * 24 * 60 * 60 * 1_000_000_000); // 7 days in nanoseconds
 }
 
 #[init]
 fn init() {
-    // Initialize with some voting power for the deployer
+
     let caller = msg_caller();
     MEMBER_VOTES.with(|votes| {
         votes.borrow_mut().insert(caller, 100);

@@ -6,6 +6,19 @@ IPX Protocol is a decentralized platform that transforms intellectual property i
 
 ---
 
+## New Feature: YouTube Proof-Based Campaign Verification
+
+Creators must now submit a cryptographic proof of their YouTube channel and metrics before launching a campaign. This proof is generated in the browser and verified by the NFTRegistry canister. Only the proof and minimal public info are stored on-chain—never raw YouTube data or credentials. This ensures only real, high-quality creators can raise funds, protects creator privacy, and gives investors confidence in campaign authenticity.
+
+### Technical Implementation
+- The NFTRegistry canister verifies and stores the submitted proof, not the underlying data.
+- CampaignFactory checks with NFTRegistry to confirm the creator’s proof is valid before allowing campaign creation.
+- All eligibility checks (like minimum subscribers/views) are enforced using the on-chain proof.
+- This flow blocks fake or unverified channels and ensures every campaign is backed by a verified YouTube presence.
+
+
+---
+
 ## Canister Interaction Architecture
 
 ```mermaid
@@ -28,6 +41,8 @@ graph LR
         APIs[Revenue APIs]
     end
     
+    Creator --> NFTRegistry
+    NFTRegistry --> Creator
     Creator --> CampaignFactory
     CampaignFactory --> NFTRegistry
     Investors --> Vault
@@ -54,6 +69,10 @@ sequenceDiagram
     participant IPXDAO
     participant IPXStream
     
+    Note over Creator,NFTRegistry: Phase 0 - YouTube Proof Verification
+    Creator->>NFTRegistry: Submit YouTube proof (ownership/metrics)
+    NFTRegistry->>Creator: Proof verified & identity registered
+
     Note over Creator,IPXStream: Phase 1 - IP Tokenization
     Creator->>CampaignFactory: Upload IP and create campaign
     CampaignFactory->>NFTRegistry: Request master NFT mint
@@ -67,14 +86,14 @@ sequenceDiagram
     NFTRegistry->>Investors: Fractional NFTs distributed
     
     Note over Creator,IPXStream: Phase 3 - Revenue Tracking
-    OracleAggregator->>OracleAggregator: Connect to revenue sources
+    RevenueApiConnector->>RevenueApiConnector: Connect to revenue sources
     loop Revenue Monitoring
-        OracleAggregator->>Vault: Send revenue updates
+        RevenueApiConnector->>Vault: Send revenue updates
     end
     
     Note over Creator,IPXStream: Phase 4 - Governance
-    NFTRegistry->>SNSDAO: Provide voting power data
-    SNSDAO->>SNSDAO: Community votes on distribution
+    NFTRegistry->>IPXDAO: Provide voting power data
+    IPXDAO->>IPXDAO: Community votes on distribution
     
     Note over Creator,IPXStream: Phase 5 - Revenue Distribution
     Vault->>IPXStream: Send revenue and ownership data
@@ -107,24 +126,23 @@ sequenceDiagram
 | **Governance Rights** | Vote on protocol decisions and revenue distribution |
 | **Early Access** | Get exposure to promising IP before mainstream success |
 
-
-
 ---
 
 ## Creator Flow (WebApp + ICP)
 
-1. **Creator visits WebApp** 
+1. **Creator visits WebApp**
 2. **Login with Internet Identity**
-
    * WebApp calls II → gets Principal ID.
    * Principal is now the creator’s on-chain identity.
-3. **Link external accounts**
-
-   * WebApp prompts "Connect YouTube / Spotify / Substack".
-   * Creator goes through OAuth → you get `access_token`/`refresh_token`.
+3. **YouTube Proof Verification**
+   * Creator connects YouTube account and generates a cryptographic proof in the browser.
+   * Proof is submitted to the NFTRegistry canister for on-chain verification.
+   * Only after successful verification can the creator proceed.
+4. **Link external accounts**
+   * WebApp prompts "Connect Spotify / Substack" (optional).
+   * Creator goes through OAuth for other platforms if desired.
    * Backend stores these, keyed by creator’s Principal.
-4. **Start Campaign**
-
+5. **Start Campaign**
    * Creator fills form: title, description, goal, revenue share.
    * WebApp calls `campaign_factory.create_campaign(principal, metadata)` on ICP.
    * A vault canister + oracle config is created.

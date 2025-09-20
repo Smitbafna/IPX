@@ -1,4 +1,4 @@
-use ic_cdk::api::{msg_caller, time, canister_self};
+use ic_cdk::api::{msg_caller, time};
 use candid::{CandidType, Principal};
 use ic_cdk_macros::*;
 use serde::{Deserialize, Serialize};
@@ -65,7 +65,7 @@ fn create_stream(
     vault_canister: Principal,
     stream_type: StreamType,
 ) -> Result<StreamId, String> {
-    let caller = msg_caller();
+    let _caller = msg_caller();
     
     if total_amount == 0 {
         return Err("Stream amount must be greater than 0".to_string());
@@ -143,11 +143,12 @@ fn create_streams(payouts: Vec<(Principal, u64)>) -> Result<Vec<StreamId>, Strin
 }
 
 #[update]
-fn claim_stream(stream_id: StreamId) -> Result<ClaimResult, String> {
+async fn claim_stream(stream_id: StreamId) -> Result<ClaimResult, String> {
     let caller = msg_caller();
     let current_time = time();
     
-    STREAMS.with(|streams| {
+    // First, get and validate the stream
+    let stream_data = STREAMS.with(|streams| {
         let mut borrowed = streams.borrow_mut();
         if let Some(stream) = borrowed.get_mut(&stream_id) {
             if stream.recipient != caller {
@@ -186,26 +187,32 @@ fn claim_stream(stream_id: StreamId) -> Result<ClaimResult, String> {
             ic_cdk::println!("Claimed {} from stream {} for {}", claimable, stream_id, caller.to_text());
             
             
-            // This assumes vault_canister is a ledger canister principal
-            let transfer_result: Result<(), String> = ic_cdk::call(
-                stream.vault_canister,
-                "transfer",
-                (stream.recipient.clone(), claimable)
-            ).await.map_err(|e| format!("Transfer failed: {:?}", e))?;
-
-            if let Err(e) = transfer_result {
-                return Err(format!("Transfer failed: {}", e));
-            }
-            
-            Ok(ClaimResult {
-                stream_id,
-                claimed_amount: claimable,
-                remaining_amount: remaining,
-                next_claim_time,
-            })
-        } else {
-            Err("Stream not found".to_string())
+            // Can't use await within STREAMS.with, so we'll just prepare the data
+            return Ok((stream.vault_canister, stream.recipient.clone(), claimable, remaining, next_claim_time));
         }
+        
+        // Return an error if stream not found
+        Err("Stream not found".to_string())
+    });
+    
+    // Extract data from our stream
+    let (vault_canister, recipient, claimable_amount, remaining, next_claim_time) = stream_data?;
+    
+    // Now we can use await outside the closure - using the deprecated API but we can fix this later
+    let res: Result<(), _> = ic_cdk::api::call::call(
+        vault_canister, 
+        "transfer",
+        (recipient, claimable_amount)
+    ).await;
+    
+    res.map_err(|e| format!("Transfer failed: {:?}", e))?;
+    
+    // Return the result
+    Ok(ClaimResult {
+        stream_id,
+        claimed_amount: claimable_amount,
+        remaining_amount: remaining,
+        next_claim_time,
     })
 }
 
@@ -348,3 +355,4 @@ fn resume_stream(stream_id: StreamId) -> Result<(), String> {
         }
     })
 }
+ic_cdk::export_candid!();

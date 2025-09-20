@@ -1,8 +1,8 @@
 'use client';
 
-
 import { useInternetIdentity } from '../lib/useInternetIdentity';
 
+const IPXComponents = () => {
   const { principal, isAuthenticated, loading, login, logout } = useInternetIdentity();
 
   if (loading) {
@@ -41,4 +41,6 @@ import { useInternetIdentity } from '../lib/useInternetIdentity';
     </div>
   );
 };
+
+export default IPXComponents;
 

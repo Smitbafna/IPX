@@ -51,7 +51,7 @@ fn init() {
 }
 
 #[update]
-fn register_campaign_oracle(
+async fn register_campaign_oracle(
     campaign_id: u64,
     vault_canister: Principal,
     endpoints: Vec<ApiEndpoint>,
@@ -284,4 +284,7 @@ fn deactivate_oracle(campaign_id: u64) -> Result<(), String> {
             Err("Oracle config not found".to_string())
         }
     })
+    
 }
+
+ic_cdk::export_candid!();

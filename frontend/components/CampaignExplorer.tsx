@@ -73,10 +73,9 @@ export const CampaignExplorer = () => {
     setMessage('');
 
     try {
-     
-     
+    
       const vaultUrl = 'https://ic0.app/api/v2/canister/rdmx6-jaaaa-aaaah-qcqyq-cai/call';
-      const contributionAmount = parseFloat(amount) * 1e8; // Convert to e8s
+      const contributionAmount = parseFloat(amount) * 1e8; 
       
       const contributionPayload = {
         method_name: 'contribute',
@@ -87,21 +86,19 @@ export const CampaignExplorer = () => {
         }
       };
 
-  
-      try {
-        const response = await fetch(vaultUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/cbor',
-          },
-          body: JSON.stringify(contributionPayload)
-        });
+      const response = await fetch(vaultUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/cbor',
+        },
+        body: JSON.stringify(contributionPayload)
+      });
 
-        const result = await response.text();
-        console.log('📄 Contribution response:', result.substring(0, 200) + '...');
-      } 
-
-     
+      const result = await response.text();
+      console.log('Contribution response:', result.substring(0, 200) + '...');
+      
+      // Mock NFT receipt ID for demonstration
+      const nftId = `NFT-${Math.floor(Math.random() * 1000000)}`;
 
       setCampaigns(prevCampaigns => 
         prevCampaigns.map(campaign => 
@@ -115,7 +112,7 @@ export const CampaignExplorer = () => {
         )
       );
 
-      setMessage(`Successfully contributed ${amount} ${currency}! 🎉 NFT Receipt: ${nftId}`);
+      setMessage(`Successfully contributed ${amount} ${currency}! NFT Receipt: ${nftId}`);
       setContributionAmounts(prev => ({ ...prev, [campaignId]: '' }));
       
     } catch (error) {
@@ -180,7 +177,7 @@ export const CampaignExplorer = () => {
               
               <p className="text-gray-600 text-sm mb-4 line-clamp-2">{campaign.description}</p>
               
-              {/* YouTube Channel Info */}
+            
               <div className="flex items-center mb-3 text-sm">
                 <svg className="w-4 h-4 text-red-600 mr-2" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
@@ -217,7 +214,7 @@ export const CampaignExplorer = () => {
                 {campaign.is_active && (
                   <div className="pt-4 border-t border-gray-200">
                     <div className="space-y-3">
-                      {/* Currency Selection */}
+          
                       <select
                         value={selectedCurrency[campaign.id] || 'ICP'}
                         onChange={(e) => setSelectedCurrency(prev => ({ 
@@ -231,7 +228,6 @@ export const CampaignExplorer = () => {
                         <option value="ckETH">ckETH (Chain-key Ethereum)</option>
                       </select>
                       
-                      {/* Contribution Amount */}
                       <div className="flex space-x-2">
                         <input
                           type="number"

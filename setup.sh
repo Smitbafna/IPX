@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# IPX Protoecho -e "${BLUE}Deploying IC Canisters...${NC}"ol Quick Setup Script
+# IPX Protocol Quick Setup Script
 set -e
 
 # Colors
@@ -12,9 +12,9 @@ NC='\033[0m'
 echo -e "${BLUE}IPX Protocol Quick Setup${NC}"
 
 # Check prerequisites exist
-for cmd in node npm dfx rustc; do
+for cmd in node npm dfx rustc cargo candid-extractor; do
     if ! command -v $cmd >/dev/null 2>&1; then
-        echo -e "${RED}Error: $cmd not found. Please install: Node.js 18+, npm, dfx, rust${NC}"
+        echo -e "${RED}Error: $cmd not found. Please install: Node.js 18+, npm, dfx, rust, cargo, candid-extractor${NC}"
         exit 1
     fi
 done
@@ -25,6 +25,43 @@ echo -e "${GREEN}All dependencies found${NC}"
 echo -e "${BLUE}� Deploying IC Canisters...${NC}"
 cd ipx-protocol
 dfx start --background --clean
+
+# Build Rust canisters and extract .did files
+echo -e "${GREEN}Building Rust canisters and extracting Candid interfaces...${NC}"
+mkdir -p candid
+
+# Build and extract for campaign-factory
+echo -e "${GREEN}Building campaign-factory...${NC}"
+cargo build --target wasm32-unknown-unknown --release --package campaign-factory
+candid-extractor target/wasm32-unknown-unknown/release/campaign_factory.wasm > candid/factory.did
+
+# Build and extract for vault
+echo -e "${GREEN}Building vault...${NC}"
+cargo build --target wasm32-unknown-unknown --release --package vault
+candid-extractor target/wasm32-unknown-unknown/release/vault.wasm > candid/vault.did
+
+# Build and extract for nft-registry
+echo -e "${GREEN}Building nft-registry...${NC}"
+cargo build --target wasm32-unknown-unknown --release --package nft-registry
+candid-extractor target/wasm32-unknown-unknown/release/nft_registry.wasm > candid/nft-registry.did
+
+# Build and extract for revenue-api-connector
+echo -e "${GREEN}Building revenue-api-connector...${NC}"
+cargo build --target wasm32-unknown-unknown --release --package revenue-api-connector
+candid-extractor target/wasm32-unknown-unknown/release/revenue_api_connector.wasm > candid/revenue-api-connector.did
+
+# Build and extract for ipx-stream
+echo -e "${GREEN}Building ipx-stream...${NC}"
+cargo build --target wasm32-unknown-unknown --release --package ipx-stream
+candid-extractor target/wasm32-unknown-unknown/release/ipx_stream.wasm > candid/ipx-stream.did
+
+# Build and extract for ipx-dao
+echo -e "${GREEN}Building ipx-dao...${NC}"
+cargo build --target wasm32-unknown-unknown --release --package ipx-dao
+candid-extractor target/wasm32-unknown-unknown/release/ipx_dao.wasm > candid/ipx-dao.did
+
+# Create, build and deploy canisters
+echo -e "${GREEN}Creating and deploying canisters...${NC}"
 dfx canister create --all
 dfx build
 dfx deploy

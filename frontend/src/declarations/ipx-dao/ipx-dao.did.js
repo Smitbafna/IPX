@@ -10,8 +10,8 @@ export const idlFactory = ({ IDL }) => {
     'description' : IDL.Text,
     'proposal_type' : ProposalType,
   });
-  const Result_1 = IDL.Variant({ 'Ok' : IDL.Nat64, 'Err' : IDL.Text });
-  const Result = IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text });
+  const Result = IDL.Variant({ 'Ok' : IDL.Nat64, 'Err' : IDL.Text });
+  const Result_1 = IDL.Variant({ 'Ok' : IDL.Text, 'Err' : IDL.Text });
   const Proposal = IDL.Record({
     'id' : IDL.Nat64,
     'voting_deadline' : IDL.Nat64,
@@ -30,15 +30,15 @@ export const idlFactory = ({ IDL }) => {
     'treasury_balance' : IDL.Nat64,
   });
   return IDL.Service({
-    'create_proposal' : IDL.Func([ProposalData], [Result_1], []),
-    'execute_proposal' : IDL.Func([IDL.Nat64], [Result], []),
+    'create_proposal' : IDL.Func([ProposalData], [Result], []),
+    'execute_proposal' : IDL.Func([IDL.Nat64], [Result_1], []),
     'get_active_proposals' : IDL.Func([], [IDL.Vec(Proposal)], ['query']),
     'get_all_proposals' : IDL.Func([], [IDL.Vec(Proposal)], ['query']),
     'get_governance_stats' : IDL.Func([], [GovernanceStats], ['query']),
     'get_proposal' : IDL.Func([IDL.Nat64], [IDL.Opt(Proposal)], ['query']),
     'get_voting_power' : IDL.Func([IDL.Principal], [IDL.Nat64], ['query']),
-    'grant_voting_power' : IDL.Func([IDL.Principal, IDL.Nat64], [Result], []),
-    'vote' : IDL.Func([IDL.Nat64, IDL.Bool], [Result], []),
+    'grant_voting_power' : IDL.Func([IDL.Principal, IDL.Nat64], [Result_1], []),
+    'vote' : IDL.Func([IDL.Nat64, IDL.Bool], [Result_1], []),
   });
 };
 export const init = ({ IDL }) => { return []; };

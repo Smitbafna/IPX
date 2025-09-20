@@ -4,7 +4,7 @@
     "campaign-factory": {
       "type": "rust",
       "package": "campaign-factory",
-      "candid": "candid/factory.did"
+      "candid": "candid/campaign-factory.did"
     },
     "vault": {
       "type": "rust", 

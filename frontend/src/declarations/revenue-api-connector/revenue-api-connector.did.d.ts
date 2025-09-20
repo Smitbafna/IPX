@@ -2,40 +2,53 @@ import type { Principal } from '@dfinity/principal';
 import type { ActorMethod } from '@dfinity/agent';
 import type { IDL } from '@dfinity/candid';
 
-export interface EndpointConfig {
+export interface ApiEndpoint {
   'url' : string,
-  'name' : string,
-  'update_frequency' : bigint,
+  'platform' : string,
   'data_path' : string,
   'auth_header' : [] | [string],
 }
-export interface OracleStats {
-  'successful_requests' : bigint,
-  'total_requests' : bigint,
-  'total_endpoints' : bigint,
-  'failed_requests' : bigint,
-  'last_update' : bigint,
+export interface HttpHeader { 'value' : string, 'name' : string }
+export interface HttpResponse {
+  'status' : bigint,
+  'body' : Uint8Array | number[],
+  'headers' : Array<HttpHeader>,
 }
-export type Result = { 'Ok' : string } |
+export interface OracleConfig {
+  'endpoints' : Array<ApiEndpoint>,
+  'update_frequency' : bigint,
+  'vault_canister' : Principal,
+  'is_active' : boolean,
+  'last_update' : bigint,
+  'campaign_id' : bigint,
+}
+export type Result = { 'Ok' : null } |
   { 'Err' : string };
-export type Result_1 = { 'Ok' : bigint } |
+export type Result_1 = { 'Ok' : Array<RevenueData> } |
   { 'Err' : string };
 export interface RevenueData {
-  'source' : string,
+  'verified' : boolean,
+  'platform' : string,
+  'currency' : string,
   'timestamp' : bigint,
-  'data_hash' : string,
+  'raw_data' : string,
   'amount' : bigint,
+  'campaign_id' : bigint,
+}
+export interface TransformArgs {
+  'context' : Uint8Array | number[],
+  'response' : HttpResponse,
 }
 export interface _SERVICE {
-  'add_endpoint' : ActorMethod<[EndpointConfig], Result>,
-  'fetch_revenue_data' : ActorMethod<[string], Result>,
-  'get_all_revenue_data' : ActorMethod<[], Array<RevenueData>>,
-  'get_endpoints' : ActorMethod<[], Array<EndpointConfig>>,
-  'get_latest_data' : ActorMethod<[string], [] | [RevenueData]>,
-  'get_oracle_stats' : ActorMethod<[], OracleStats>,
-  'get_revenue_data' : ActorMethod<[string], [] | [RevenueData]>,
-  'remove_endpoint' : ActorMethod<[string], Result>,
-  'update_endpoint_auth' : ActorMethod<[string, string], Result>,
+  'deactivate_oracle' : ActorMethod<[bigint], Result>,
+  'fetch_revenue_data' : ActorMethod<[bigint], Result_1>,
+  'get_oracle_config' : ActorMethod<[bigint], [] | [OracleConfig]>,
+  'get_revenue_history' : ActorMethod<[bigint], Array<RevenueData>>,
+  'register_campaign_oracle' : ActorMethod<
+    [bigint, Principal, Array<ApiEndpoint>, bigint],
+    Result
+  >,
+  'transform_response' : ActorMethod<[TransformArgs], HttpResponse>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;
 export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];

@@ -28,20 +28,20 @@ export interface ProposalData {
 export type ProposalType = { 'CodeUpgrade' : null } |
   { 'ParameterChange' : null } |
   { 'Treasury' : null };
-export type Result = { 'Ok' : string } |
+export type Result = { 'Ok' : bigint } |
   { 'Err' : string };
-export type Result_1 = { 'Ok' : bigint } |
+export type Result_1 = { 'Ok' : string } |
   { 'Err' : string };
 export interface _SERVICE {
-  'create_proposal' : ActorMethod<[ProposalData], Result_1>,
-  'execute_proposal' : ActorMethod<[bigint], Result>,
+  'create_proposal' : ActorMethod<[ProposalData], Result>,
+  'execute_proposal' : ActorMethod<[bigint], Result_1>,
   'get_active_proposals' : ActorMethod<[], Array<Proposal>>,
   'get_all_proposals' : ActorMethod<[], Array<Proposal>>,
   'get_governance_stats' : ActorMethod<[], GovernanceStats>,
   'get_proposal' : ActorMethod<[bigint], [] | [Proposal]>,
   'get_voting_power' : ActorMethod<[Principal], bigint>,
-  'grant_voting_power' : ActorMethod<[Principal, bigint], Result>,
-  'vote' : ActorMethod<[bigint, boolean], Result>,
+  'grant_voting_power' : ActorMethod<[Principal, bigint], Result_1>,
+  'vote' : ActorMethod<[bigint, boolean], Result_1>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;
 export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];
