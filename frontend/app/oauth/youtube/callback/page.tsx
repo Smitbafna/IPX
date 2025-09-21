@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Principal } from '@dfinity/principal';
 import { Actor } from '@dfinity/agent';
 import { createAgent, CANISTER_IDS } from '../../../../lib/agent';
@@ -13,7 +13,6 @@ import { idlFactory as nftIDL } from '../../../../src/declarations/nft-registry'
 
 export default function YouTubeCallback() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Processing YouTube verification...');
   
@@ -21,8 +20,9 @@ export default function YouTubeCallback() {
     const processOAuth = async () => {
       try {
         // Extract code and state from URL
-        const code = searchParams.get('code');
-        const state = searchParams.get('state');
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
         
         // Get state and principal from session storage
         const storedState = sessionStorage.getItem('youtube_oauth_state');
@@ -89,7 +89,7 @@ export default function YouTubeCallback() {
     };
     
     processOAuth();
-  }, [searchParams]);
+  }, []);
   
   // Get NFT Registry actor
   const getNFTRegistryActor = async (): Promise<NFTRegistryCanister> => {
