@@ -5,6 +5,31 @@ IPX Protocol is a decentralized platform that transforms intellectual property i
 **Example**: A musician sells 1000 fractional shares of their album for $50 each, raising $50K. When the album earns $5K monthly from streaming, each share owner automatically receives $5/month proportional to their ownership percentage.
 
 ---
+## Focusing on Empowering the Investors/Backers!
+
+## THE PROBLEM
+
+1 . **Fake Creators Could Launch Campaigns**
+
+  Until now, there was no cryptographic proof that a YouTube/Spotify account really belonged to the person launching a campaign. This opened the door to imposters.
+
+2 . **Popular Creators Could Launch False or Low-Quality Projects**
+
+  Even verified creators could raise funds for projects they later abandoned, leaving backers unprotected.
+
+  
+
+Until now IPX focused on giving creators powerful tools to raise capital. Now we’re rolling out two upgrades designed to protect and empower investors too:
+
+**Verified Campaigns** –
+
+Creators must prove YouTube ownership & metrics via a zero-knowledge proof before launching. No private data leaves the browser. Only real, high-quality creators get listed.
+
+**On-Chain Insurance + Slashing**– 
+
+A small % of every investment goes into an insurance pool. If a campaign fails or a creator misbehaves, investors can claim payouts and governance can slash creator revenue shares.
+
+---
 
 ## New Feature: YouTube Proof-Based Campaign Verification
 
